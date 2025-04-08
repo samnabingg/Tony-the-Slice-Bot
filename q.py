@@ -7,12 +7,12 @@ import string
 import secrets
 from flask_wtf import CSRFProtect
 from forms import LoginForm
-from datetime import timedelta
+from datetime import timedelta, datetime
 import logging
 
 logging.basicConfig(level=logging.INFO)
 
-load_dotenv()  # Load environment variables from .env file
+load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', secrets.token_hex(32))
@@ -123,8 +123,8 @@ def order_summary():
 
                 total_amount = float(item['price']) * int(item['quantity'])
                 cursor.execute(
-                    "INSERT INTO orders (orderId, cId, itemId, totalAmount, itemName, quantity) VALUES (%s, %s, %s, %s, %s, %s)",
-                    (order_id, session['cId'], item['itemId'], total_amount, item['itemName'], item['quantity'])
+                    "INSERT INTO orders (orderId, cId, itemId, totalAmount, itemName, quantity, orderTime) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    (order_id, session['cId'], item['itemId'], total_amount, item['itemName'], item['quantity'], datetime.now())
                 )
             conn.commit()
         return jsonify({"message": "Order processed successfully", "orderId": order_id}), 200
@@ -194,9 +194,65 @@ def webhook():
     logging.info(f"Webhook received: {data}")
 
     parameters = data.get('queryResult', {}).get('parameters', {})
-    session_path = data.get('session', '')
-    username = session_path.split('/')[-1] or 'Guest'
+    intent = data.get('queryResult', {}).get('intent', {}).get('displayName')
+    username = "Guest"
 
+    if 'cId' in session:
+        conn = g.db_connection
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT username FROM customers WHERE cId = %s", (session['cId'],))
+            result = cursor.fetchone()
+            if result:
+                username = result['username']
+
+    if intent == 'track.order':
+        if 'cId' not in session:
+            return jsonify({'fulfillmentText': "You're not logged in. Please log in first."})
+
+        latest_order = get_latest_order(session['cId'])
+
+        if latest_order and latest_order.get('orderTime'):
+            order_time = latest_order['orderTime']
+            now = datetime.now()
+            elapsed_minutes = (now - order_time).total_seconds() / 60
+
+            if elapsed_minutes < 5:
+                status = "Your order is in the queue."
+            elif elapsed_minutes < 10:
+                status = "Your order is being prepared and will be out soon!"
+            elif elapsed_minutes < 15:
+                status = "Your order is in transit to the pickup counter."
+            else:
+                status = "Your order is ready! Please come pick it up."
+
+            return jsonify({'fulfillmentText': status})
+        else:
+            return jsonify({'fulfillmentText': "I couldn't find any recent orders."})
+
+    elif intent == 'loyalty.rewards':
+        if 'cId' not in session:
+            return jsonify({'fulfillmentText': "Please log in to view your loyalty rewards."})
+
+        points = get_user_points(session['cId'])
+
+        if points is not None:
+            return jsonify({'fulfillmentText': f"You currently have {points} loyalty points!"})
+        else:
+            return jsonify({'fulfillmentText': "Sorry, we couldn't find your rewards info."})
+
+    elif intent == 'order.complete':
+        if 'cId' not in session:
+            return jsonify({'fulfillmentText': "You're not logged in. Please log in first."})
+
+        latest_order = get_latest_order(session['cId'])
+        if latest_order and 'orderId' in latest_order:
+            order_id = latest_order['orderId']
+            session['last_order_id'] = order_id
+            return jsonify({'fulfillmentText': f"Thanks for your order! 🍕 Your Order ID is {order_id}. Now, sit back and wait for the magic!"})
+        else:
+            return jsonify({'fulfillmentText': "We couldn't find your order in our system. Please try again or place a new order."})
+
+    # Handle food item logging
     food_items = parameters.get('food-item', [])
     quantities = parameters.get('number', [])
 
@@ -219,9 +275,27 @@ def webhook():
             conn.commit()
 
         item_summary = ', '.join([f"{int(quantities[i]) if i < len(quantities) else 1} x {food}" for i, food in enumerate(food_items)])
-        return jsonify({'fulfillmentText': f"Got it, {username}! I've added: {item_summary} to your order."})
+        return jsonify({'fulfillmentText': f"Got it, {username}! I've added: {item_summary} to your order. 🍕\nWould you like to order anything else? Type 'done' if you're finished, or tell me your next item and quantity."})
     except Exception as e:
         return jsonify({'fulfillmentText': f"Oops! Error: {str(e)}"}), 500
+
+# Helper functions
+def get_latest_order(cId):
+    conn = g.db_connection
+    with conn.cursor() as cursor:
+        cursor.execute("""
+            SELECT * FROM orders 
+            WHERE cId = %s 
+            ORDER BY orderTime DESC LIMIT 1
+        """, (cId,))
+        return cursor.fetchone()
+
+def get_user_points(cId):
+    conn = g.db_connection
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT points FROM rewards WHERE cId = %s", (cId,))
+        result = cursor.fetchone()
+        return result['points'] if result else None
 
 if __name__ == '__main__':
     app.run(debug=True)
