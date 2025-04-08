@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    
+    <title>Our Menu</title>
+    <a href="{{ url_for('orders') }}">
+        <button class="button-right">Order Now</button>
+        <style>
+            .button-right {
+                position: absolute;
+                top: 0;
+                right: 0;
+                background-color: #4CAF50;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+            }
+            
+        </style>
+        
+    </a>
+</head>
+<body class="menu-page">
+    <header>
+        <h1>Our Menu</h1>
+    </header>
+    <section class="menu">
+        <div class="menu-item">
+            
+            <h3>Classic Pizza</h3>
+            <img src="{{ url_for('static', filename='download-1.jpg') }}" alt="Classic Pizza">
+            <p>Classic pizza with tomato sauce, mozzarella cheese, and fresh basil.</p>
+
+            <span> Only $10.00</span>
+    
+        </div>
+        <div class="menu-item"> 
+            
+            <h3>Cheesy Pep Pizza</h3>
+            <img src="{{ url_for('static', filename='pep.jpg') }}" alt="Cheesy Pep Pizza">
+            <p>Delicious pizza topped with pepperoni slices and mozzarella cheese.</p>
+            <span> Only $10.00</span>
+          
+       
+        </div>
+        <div class="menu-item">
+            <h3>Cheesy Mushroom Pizza</h3>
+            <img src="{{ url_for('static', filename='mushroom.jpg') }}" alt="Cheesy Mushroom Pizza">
+            <p>Healthy pizza loaded with mushroom,cheese and veggies</p>
+            <span> Only $10.00</span>
+        
+            <section class="sides">
+                <div class="sides-item">
+
+            <h2> Sides  </h2>
+                    <h3>Garlic Bread</h3>
+                    <img src="{{ url_for('static', filename='garlic bread.png') }}" alt="Garlic Bread">
+                    <span> Only $2.00</span>
+                    <h3>Fries</h3>
+                    <img src="{{ url_for('static', filename='fries.jpg') }}" alt="Fries">
+                    <span> Only $2.00</span>
+
+
+        </div>
+
+
+    </section>
+    <footer>
+        <p>&copy; 2024 Cheesy Pizza. All rights reserved.</p>
+    </footer>
+</body>
+
+<style>
+
+.menu-page{
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+    font: 1em sans-serif;
+    color: rgb(58, 0, 139);
+    background-color: wheat;
+
+}
+.menu-item {
+    position: relative;
+    overflow: hidden;
+}
+
+.menu-item img {
+    width: 100%;
+    height: auto;
+    border-radius: 5px 5px 0 0;
+}
+
+.menu-item h3,
+.menu-item p,
+.menu-item span {
+    position: relative;
+    z-index: 1;
+}
+
+.menu-item::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color:rgba(255, 255, 255, 0.586);
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+.menu-item:hover::after {
+    opacity: 1;
+}
+
+.menu-item h3,
+.menu-item p,
+.menu-item span {
+    position: relative;
+    z-index: 2;
+    font-style: italic;
+    color: rgb(58, 0, 139);
+}
+.menu-item {
+    position: relative; 
+}
+
+.order-now-btn {
+    display: inline-block;
+    background-color: black;
+    color: whitesmoke;
+    padding: 5px 10px;
+    border-radius: 5px;
+    text-decoration: none;
+    margin-top: 10px;
+    cursor: pointer;
+    position: absolute; 
+    top: 0; 
+    right: 0; 
+}
+
+.home-btn{
+
+    background-color: red;
+    color: whitesmoke;
+    padding: 5px 10px;
+    border-radius: 5px;
+    text-decoration: none;
+    margin-top: 10px;
+    cursor: pointer;
+    position: absolute; 
+    top: 0; 
+    left: 0; 
+    
+}
+.menu-item h2{
+    font-size: 5rem;
+    margin-bottom: 10px;
+    color: black;
+}
+</style>

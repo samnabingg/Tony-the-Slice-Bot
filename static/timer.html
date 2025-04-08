@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Confirmation</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+            counter-reset: dark blue;
+            background-color: #f2f2f2; /* Light gray background */
+        }
+        h1 {
+            color: #333; /* Dark gray text color */
+            font-size: 2em;
+            margin-bottom: 20px; /* Space below the heading */
+        }
+        #order-status {
+            font-size: 1.2em;
+            color: #333;
+            margin-top: 30px; /* Space above the order status */
+        }
+        #timer {
+            font-size: 3em;
+            color: #1976d2; /* Dark blue text color */
+            font-weight: bold; 
+            display: inline-block; 
+            border-bottom: 2px solid #1976d2; 
+            padding-bottom: 5px; 
+        }
+    </style>
+</head>
+<body>
+    <h1>Thanks for your order!</h1>
+    <p id="order-status">Your order will be ready in <span id="timer">1:00</span> minutes.</p> 
+    <script>
+        let countdown = 20 * 60 * 1000; 
+        const timerDisplay = document.getElementById('timer');
+        const orderStatus = document.getElementById('order-status');
+    
+        const intervalId = setInterval(function() {
+            countdown -= 1000;
+            const min = Math.floor(countdown / (60 * 1000));
+            const sec = Math.floor((countdown - (min * 60 * 1000)) / 1000);
+    
+            if (min === 0 && sec === 0) {
+                orderStatus.textContent = "Your order is ready, pick it up from the store";
+                clearInterval(intervalId); 
+            } else {
+                timerDisplay.textContent = `${min}:${sec < 10 ? '0' : ''}${sec}`;
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

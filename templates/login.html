@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Login Form</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-image: url("{{ url_for('static', filename='login.jpg') }}");
+            background-size: cover;
+            margin: 0;
+            padding: 0;
+        }
+        .container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .container form {
+            width: 300px;
+            margin: 0 auto;
+            padding: 30px;
+            background-color: wheat;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+        }
+        .container label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        .container input[type="text"],
+        .container input[type="submit"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        .container input[type="submit"] {
+            background-color: #007bff;
+            color: #fff;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .container input[type="submit"]:hover {
+            background-color: #0056b3;
+        }
+        .error-message {
+            color: red;
+            font-size: 12px;
+            margin-top: -15px;
+            margin-bottom: 10px;
+        }
+        @media (max-width: 768px) {
+            .container form {
+                width: 80%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Login Form</h1>
+        <form id="login-form" method="post" autocomplete="off">
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required
+                   pattern="[A-Za-z]{1,20}" 
+                   title="Username must be 1-20 alphabetic characters (letters only)">
+
+            <label for="phone_number">Phone Number:</label>
+            <input type="text" id="phone_number" name="phone_number" required
+                   pattern="\d{10}" 
+                   title="Enter a 10-digit phone number">
+
+            <input type="submit" value="Submit">
+        </form>
+    </div>
+
+    <script>
+        document.getElementById('login-form').addEventListener('submit', async function(e) {
+            e.preventDefault(); 
+            const username = document.getElementById('username').value.trim();
+            const phone_number = document.getElementById('phone_number').value.trim();
+
+            if (!/^[A-Za-z]{1,20}$/.test(username)) {
+                alert("Username must be 1–20 alphabetic characters (letters only)");
+                return;
+            }
+
+            if (!/^\d{10}$/.test(phone_number)) {
+                alert("Please enter a valid 10-digit phone number");
+                return;
+            }
+
+            try {
+                const response = await fetch('/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, phone_number })
+                });
+
+                const result = await response.json();
+
+                if (response.ok && result.success) {
+                    localStorage.setItem('username', username);
+                    window.location.href = result.redirect || '/web';
+                } else {
+                    alert(result.message || "Login failed");
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert("An error occurred during login");
+            }
+        });
+    </script>
+</body>
+</html>

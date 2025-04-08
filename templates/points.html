@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <title>Rewards</title>
+    <style>
+    
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 50px;
+            counter-reset: dark blue;
+            background-color:lightgoldenrodyellow;
+        }
+
+        header {
+            margin-bottom: 20px;
+        }
+
+        .rewards {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .rewards-item {
+    margin: 20px;
+    padding: 20px;
+    border: 1px solid yellow;
+    border-radius: 5px;
+    background-color: tomato;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    max-width: 600px;
+    transition: transform 0.3s;
+}
+
+.rewards-item:hover {
+    transform: scale(1.05);
+}
+
+.rewards-item h3 {
+    font-size: 1.2em;
+    color: white;
+    margin-bottom: 10px;
+}
+
+.rewards-item p {
+    font-size: 1em;
+    color: white;
+    margin-bottom: 15px;
+}
+
+.rewards-item button {
+    display: block;
+    margin: 10px auto;
+    padding: 8px 15px;
+    border: none;
+    border-radius: 5px;
+    background-color: #007bff;
+    color: #ffffff;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+
+.rewards-item button:hover {
+    background-color: #0056b3;
+}
+        footer {
+            margin-top: 50px;
+        }
+
+        footer p {
+            font-size: 14px;
+            color: #cb1f1f88;
+        }
+
+      
+    </style>
+    <script src="script.js"></script>
+</head>
+
+<body class="rewards-page">
+    <header>
+        <head>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                }
+        
+                h1 {
+                    color: #160404af;
+                    font-size: 2.5em;
+                }
+        
+                p {
+                    color: #333;
+                    font-size: 1.2em;
+                }
+        
+                #points {
+                    color: #FF5722;
+                    font-weight: bold;
+                }
+            </style>
+        </head>
+
+        <body class="rewards-page">
+            <header>
+                <h1>Rewards</h1>
+                <p>Points Earned: <span id="points">0</span></p>
+            </header>
+        
+            <section class="rewards">
+                <div class="rewards-item" id="pizza-slice-reward">
+                    <h3>5 points for every order of 20$</h3>
+                    <p>Use your rewards and grab free pizza.</p>
+                    <button onclick="redeemReward('pizza-slice')">Redeem</button>
+                </div>
+            </section>
+        
+            
+            </footer>
+    
+        <p>&copy; 2024 Cheesy Pizza. All rights reserved.</p>
+    </footer>
+    <script>
+    let points = 0; // Initialize points outside of the fetch block
+
+    // Fetch and display the reward points
+    fetch('/api/rewards')
+        .then(response => response.json())
+        .then(rewards => {
+            if (Array.isArray(rewards)) {
+                points = rewards.reduce((acc, reward) => acc + reward.amount, 0);
+            }
+            document.getElementById('points').textContent = points;
+        });
+    
+ 
+    function redeemReward() {
+        if (points >= 5) {
+            points -= 5;
+            document.getElementById('points').textContent = points;
+            alert('You have used your rewards!');
+            
+            // Update the server with the new points value
+            fetch('/api/rewards', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ points: points }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Success:', data);
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+            });
+    
+            window.location.href = '/orders'; 
+        } else {
+            alert('You do not have enough points to redeem this reward.');
+        }
+    }
+   
+</script>    
+</body>
+</html>

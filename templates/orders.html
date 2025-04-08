@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pizza Order</title>
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            margin: 2rem;
+            background-color: #f5f5f5;
+            background-image: url("{{ url_for('static', filename='back.webp') }}");
+        }
+
+        h1 {
+            text-align: center;
+            margin-top: 20px;
+            color: #092a0d;
+        }
+
+        .container {
+            margin: 20px auto;
+            width: 80%;
+            background-color: wheat;
+            padding: 10px 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .item, .side {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .price {
+            color: #51ce23;
+        }
+
+        #total {
+            font-weight: bold;
+            color: #333333;
+        }
+
+        /* Button Styles */
+        #clear-btn {
+            background-color: #f44336;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        #order-btn {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+        }
+
+        button:hover, a:hover {
+            opacity: 0.8;
+        }
+
+        /* Rewards Section */
+        .reward-btn {
+            background-color: transparent;
+            color: #3498db;
+            border: 2px solid #3498db;
+            border-radius: 5px;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: color 0.3s, border-color 0.3s;
+        }
+
+        .reward-btn:hover {
+            color: #2980b9;
+            border-color: #2980b9;
+        }
+
+        .reward-btn.outlined {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .reward-btn.outlined:hover {
+            background-color: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <h1>Pizzas</h1>
+    <div class="container">
+        <ul id="pizza-list">
+            <li class="pizza-item">
+                <label for="classicPizza">Classic Pizza - $10.00</label>
+                <input type="checkbox" id="classicPizza" name="item" value="1" data-price="10.00">
+                <input type="number" id="classicPizzaQuantity" name="quantity" min="1" max="10" value="1">
+            </li>
+            <li class="pizza-item">
+                <label for="pepperoniPizza">Pepperoni Pizza - $10.00</label>
+                <input type="checkbox" id="pepperoniPizza" name="item" value="2" data-price="10.00">
+                <input type="number" id="pepperoniPizzaQuantity" name="quantity" min="1" max="10" value="1">
+            </li>
+            <li class="pizza-item">
+                <label for="mushroomPizza">Mushroom Pizza - $10.00</label>
+                <input type="checkbox" id="mushroomPizza" name="item" value="3" data-price="10.00">
+                <input type="number" id="mushroomPizzaQuantity" name="quantity" min="1" max="10" value="1">
+            </li>
+        </ul>
+    </div>
+
+    <h1>Sides</h1>
+    <div class="container">
+        <ul id="sides-list">
+            <li class="sides-item">
+                <label for="fries">Fries - $2.00</label>
+                <input type="checkbox" id="fries" name="side" value="4" data-price="2.00">
+                <input type="number" id="friesQuantity" name="quantity" min="1" max="10" value="1">
+            </li>
+            <li class="sides-item">
+                <label for="garlicBread">Garlic Bread - $2.00</label>
+                <input type="checkbox" id="garlicBread" name="side" value="5" data-price="2.00">
+                <input type="number" id="garlicBreadQuantity" name="quantity" min="1" max="10" value="1">
+            </li>
+        </ul>
+    </div>
+
+    <div class="container">
+        <h2>Order Summary</h2>
+        <ul id="order-summary"></ul>
+        <p>Total: $<span id="total">0.00</span></p>
+        <button id="clear-btn">Clear Everything</button>
+        <a href="/timer" class="place-order" id="order-btn">Place Your Order</a>
+    </div>
+
+    <header>
+        <h1>Rewards</h1>
+        <p>Points Earned: <span id="points">0</span></p>
+    </header>
+
+    <section class="rewards">
+        <div class="rewards-item" id="pizza-slice-reward">
+            <button class="reward-btn" onclick="redeemReward()">Redeem (5 points)</button>
+        </div>
+    </section>
+
+    <script>
+        // DOM Elements
+        const itemCheckboxes = document.querySelectorAll('input[name="item"]');
+        const sideCheckboxes = document.querySelectorAll('input[name="side"]');
+        const quantityInputs = document.querySelectorAll('input[type="number"]');
+        const totalSpan = document.getElementById('total');
+        const orderSummary = document.getElementById('order-summary');
+        const clearButton = document.getElementById('clear-btn');
+        const orderButton = document.getElementById('order-btn');
+        const pointsSpan = document.getElementById('points');
+        
+        let points = 0;
+
+        // Update total price calculation
+        function updateTotal() {
+            let total = 0;
+            
+            itemCheckboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    const price = parseFloat(checkbox.getAttribute('data-price'));
+                    const quantity = parseInt(document.getElementById(`${checkbox.id}Quantity`).value) || 0;
+                    total += price * quantity;
+                }
+            });
+            
+            sideCheckboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    const price = parseFloat(checkbox.getAttribute('data-price'));
+                    const quantity = parseInt(document.getElementById(`${checkbox.id}Quantity`).value) || 0;
+                    total += price * quantity;
+                }
+            });
+            
+            totalSpan.textContent = total.toFixed(2);
+        }
+
+        // Add items to order summary and send to server
+        function addToOrder() {
+            const selectedItems = [];
+            
+            itemCheckboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    const quantity = parseInt(document.getElementById(`${checkbox.id}Quantity`).value) || 0;
+                    selectedItems.push({
+                        itemId: parseInt(checkbox.value),
+                        itemName: checkbox.parentElement.textContent.trim().split(' - ')[0],
+                        price: parseFloat(checkbox.getAttribute('data-price')),
+                        quantity: quantity
+                    });
+                }
+            });
+            
+            sideCheckboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    const quantity = parseInt(document.getElementById(`${checkbox.id}Quantity`).value) || 0;
+                    selectedItems.push({
+                        itemId: parseInt(checkbox.value),
+                        itemName: checkbox.parentElement.textContent.trim().split(' - ')[0],
+                        price: parseFloat(checkbox.getAttribute('data-price')),
+                        quantity: quantity
+                    });
+                }
+            });
+
+            // Update order summary display
+            orderSummary.innerHTML = '';
+            selectedItems.forEach(item => {
+                const li = document.createElement('li');
+                li.textContent = `${item.itemName} x${item.quantity} - $${(item.price * item.quantity).toFixed(2)}`;
+                orderSummary.appendChild(li);
+            });
+
+            // Send data to server
+            const dataToSend = { orderData: { selectedItems: selectedItems } };
+            
+            fetch('/api/order-summary', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(dataToSend)
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Order successful:', data);
+                // Update points after successful order
+                updatePoints();
+            })
+            .catch(error => {
+                console.error('Order failed:', error);
+            });
+        }
+
+        // Clear all selections
+        function clearAll() {
+            itemCheckboxes.forEach(checkbox => checkbox.checked = false);
+            sideCheckboxes.forEach(checkbox => checkbox.checked = false);
+            quantityInputs.forEach(input => input.value = 1);
+            orderSummary.innerHTML = '';
+            totalSpan.textContent = '0.00';
+        }
+
+        // Validate order before submission
+        function validateOrder() {
+            const selectedItems = [...itemCheckboxes, ...sideCheckboxes].filter(checkbox => checkbox.checked);
+            if (selectedItems.length === 0) {
+                alert('Please select at least one item before placing your order.');
+                return false;
+            }
+            return true;
+        }
+
+        // Redeem reward points
+        function redeemReward() {
+            if (points >= 5) {
+                points -= 5;
+                pointsSpan.textContent = points;
+                
+                // Apply $5 discount to total
+                let currentTotal = parseFloat(totalSpan.textContent);
+                currentTotal = Math.max(0, currentTotal - 5);
+                totalSpan.textContent = currentTotal.toFixed(2);
+                
+                alert('$5 discount applied!');
+            } else {
+                alert('You need at least 5 points to redeem this reward.');
+            }
+        }
+
+        // Fetch and update points from server
+        function updatePoints() {
+            fetch('/api/rewards')
+                .then(response => response.json())
+                .then(rewards => {
+                    points = rewards.reduce((total, reward) => total + reward.amount, 0);
+                    pointsSpan.textContent = points;
+                })
+                .catch(error => {
+                    console.error('Error fetching rewards:', error);
+                });
+        }
+
+        // Event Listeners
+        itemCheckboxes.forEach(checkbox => checkbox.addEventListener('change', updateTotal));
+        sideCheckboxes.forEach(checkbox => checkbox.addEventListener('change', updateTotal));
+        quantityInputs.forEach(input => {
+            input.addEventListener('change', updateTotal);
+            input.addEventListener('input', updateTotal);
+        });
+        clearButton.addEventListener('click', clearAll);
+        orderButton.addEventListener('click', (e) => {
+            if (!validateOrder()) {
+                e.preventDefault();
+            } else {
+                addToOrder();
+            }
+        });
+
+        // Initialize
+        updateTotal();
+        updatePoints();
+    </script>
+</body>
+</html>

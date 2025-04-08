@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:400,700">
+    <div id="header">
+    </div>
+    
+    <h1 style="color:aliceblue;">Welcome, <span id="username">{{ username }}</span>!</h1>    
+            <script>
+   document.addEventListener('DOMContentLoaded', function() {
+    let username = "{{ username }}";
+    localStorage.setItem('username', username);
+    let usernameElement = document.getElementById('username');
+    let orderBtn = document.getElementById('order-btn');
+
+    <h1 style="color:aliceblue;">Welcome, <span id="username">{{ username }}</span>!</h1>
+
+    if (username) {
+        if (usernameElement) {
+            usernameElement.textContent = username;
+        }
+        if (orderBtn) {
+            orderBtn.disabled = false;
+        }
+    }
+});
+</script>
+
+        
+        </script>
+   
+</head>
+<body class="web-page",>
+</body>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css?family=Roboto:400,700');
+    </style>
+<header class="header"> 
+    <a href="#" class="logo"><i class="fas fa-pizza-slice"></i>Slice</a>
+    <span id="username-display"></span>
+    <nav class="navbar">
+        
+        <a href="/menu" id="menu-btn" target="_blank">Menu</a>
+        <a href="/points" id="rewards-btn" target="_blank">Rewards</a>
+        <a href="/contact" id="contact-btn" target="_blank">About Us</a>
+    </nav>
+</header>
+<div class="icons">
+    <script src="script.js"></script>
+    <section class="home" id="home-section">
+        <div class="content">
+            <div class="image-container">
+              
+
+            </div>
+        </div>
+        
+    </section>
+</div>
+<script src="https://www.gstatic.com/dialogflow-console/fast/messenger/bootstrap.js?v=1"></script>
+<df-messenger
+  intent="WELCOME"
+  chat-title="TonytheSlicebot"
+  agent-id="ced4eb2f-c5e6-4885-adaf-31a361664559"
+  language-code="en"
+></df-messenger>
+
+<script>
+    const user = localStorage.getItem('username') || 'Guest';
+    document.querySelector('df-messenger').setAttribute('user-id', user);
+</script>
+
+
+</body> 
+</html>
+<style>
+
+
+@import url('https://fonts.googleapis.com/css?family=Roboto:400,700');
+
+:root {
+    --main-color: #00178b;
+    --black: #000;
+    --bg: #f5f5f5;
+    --border: 0.1rem solid rgba(255, 255, 255, 0.304);
+}
+
+.web-page {
+    background-position: auto;
+    background-repeat: no-repeat;
+    background-size: cover; 
+    background-image: url("{{ url_for('static', filename='im.jpg') }}");
+}
+
+ .header
+ {font-family: 'Roboto', sans-serif;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    outline: none;
+    border: none;
+    text-decoration: none;
+    text-transform: capitalize;
+    transition: 0.2s linear;
+
+}
+    
+
+
+
+.header .logo {
+    color: orange;
+    font-size: 4rem;
+    font-weight: 700;
+}
+
+
+nav {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    background-color:black;
+    padding: 1rem 0;
+}
+
+nav a {
+    color: red;
+    text-decoration: none;
+    font-size: 1.2rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    transition: background-color 0.3s;
+}
+
+nav a:hover {
+    background-color: #126b00;
+}
+
+
+.home {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    padding: 2rem 0;
+    text-align: center;
+}
+
+
+
+
+
+
+</style>
+
+</style>  
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+       
+        const params = new URLSearchParams(window.location.search);
+        const username = params.get('username');
+        let usernameElement = document.querySelector('.username');
+        if (username && usernameElement) {
+            usernameElement.textContent = username;
+        }
+  
+        let orderBtn = document.querySelector('.order-now-btn');
+        if (username && orderBtn) {  // Use 'username' instead of 'usernameLocalStorage'
+            orderBtn.removeAttribute('aria-disabled');
+        }
+    });
+</script>
+<style>
+    df-messenger {
+      --df-messenger-button-titlebar-color: #000;
+      --df-messenger-button-titlebar-font-color: #fff;
+      --df-messenger-chat-background-color: #fff;
+      --df-messenger-font-color: #000;
+      --df-messenger-user-message: #eaeaea;
+      --df-messenger-bot-message: #f2f2f2;
+      --df-messenger-input-box-color: #fff;
+      --df-messenger-input-font-color: #000;
+  
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 999;
+      width: 370px;
+      max-height: 100px;
+    }
+  
+    df-messenger .df-messenger-wrapper {
+      max-height: 500px !important;
+      height: 100% !important;
+    }
+  </style>
+  
+
+
+</script>
+
+<!DOCTYPE html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About Us</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+
+        header {
+            background-color: orange;
+            color: #fff;
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        main {
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+
+        .contact-info {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .contact-info h2 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .contact-info p {
+            font-size: 1.2rem;
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        img {
+            width: 100%;
+            height: auto;
+        }
+
+        footer {
+            background-color:black;
+            color: #fff;
+            text-align: center;
+            padding: 10px 0;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>About Us</h1>
+    </header>
+    <main>
+        <h2> "Where Every Bite Tells a Delicious Story!"</h2>
+       
+        <img src="{{ url_for('static', filename='people.png') }}" alt="People">
+        <style>
+            img {
+    width: 50%; 
+    height: auto;
+    display: block;
+    margin: 0 auto; 
+}
+        </style>
+        <section class="contact-info">
+            <h2>Our Address</h2>
+            <p>1 University Plaza <br>Cape Girardeau, Missouri <br></p>
+            <h2>Contact Information</h2>
+            <p>Email: info@restaurant.com<br>Phone: +1234567890</p>
+</body>
+</html>
