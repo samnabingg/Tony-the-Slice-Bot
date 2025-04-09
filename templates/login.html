@@ -69,53 +69,62 @@
                    pattern="[A-Za-z]{1,20}" 
                    title="Username must be 1-20 alphabetic characters (letters only)">
 
-            <label for="phone_number">Phone Number:</label>
-            <input type="text" id="phone_number" name="phone_number" required
-                   pattern="\d{10}" 
-                   title="Enter a 10-digit phone number">
+            
+    <!-- Replace phone input -->
+<label for="password">Password:</label>
+<input type="password" id="password" name="password" required>
+<br>
+<br>
+<input type="submit" value="Login">
 
-            <input type="submit" value="Submit">
-        </form>
-    </div>
 
-    <script>
-        document.getElementById('login-form').addEventListener('submit', async function(e) {
-            e.preventDefault(); 
-            const username = document.getElementById('username').value.trim();
-            const phone_number = document.getElementById('phone_number').value.trim();
+<!-- Update JS fetch call -->
+<script>
+document.getElementById('login-form').addEventListener('submit', async function(e) {
+    e.preventDefault(); 
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value.trim();
 
-            if (!/^[A-Za-z]{1,20}$/.test(username)) {
-                alert("Username must be 1–20 alphabetic characters (letters only)");
-                return;
-            }
+    if (!/^[A-Za-z]{1,20}$/.test(username)) {
+        alert("Username must be 1–20 alphabetic characters (letters only)");
+        return;
+    }
 
-            if (!/^\d{10}$/.test(phone_number)) {
-                alert("Please enter a valid 10-digit phone number");
-                return;
-            }
-
-            try {
-                const response = await fetch('/login', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ username, phone_number })
-                });
-
-                const result = await response.json();
-
-                if (response.ok && result.success) {
-                    localStorage.setItem('username', username);
-                    window.location.href = result.redirect || '/web';
-                } else {
-                    alert(result.message || "Login failed");
-                }
-            } catch (error) {
-                console.error('Error:', error);
-                alert("An error occurred during login");
-            }
+    try {
+        const response = await fetch('/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ username, password })
         });
-    </script>
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            localStorage.setItem('username', username);
+            window.location.href = result.redirect || '/web';
+        } else {
+            alert(result.message || "Login failed");
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert("An error occurred during login");
+    }
+});
+</script>
+
+    <div style="text-align: center; margin-top: 10px;">
+        <a href="{{ url_for('signup') }}" style="
+            display: inline-block;
+            font-size: 14px;
+            font-weight: bold;
+            text-decoration: none;
+            color: #3710e0;
+            transition: color 0.3s;
+        " onmouseover="this.style.color='#0056b3'" onmouseout="this.style.color='#e11b8d'">
+            Don’t have an account? Sign up here
+        </a>
+    </div>
 </body>
 </html>

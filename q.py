@@ -6,9 +6,11 @@ import random
 import string
 import secrets
 from flask_wtf import CSRFProtect
-from forms import LoginForm
+from forms import LoginForm, SignupForm  # 🔥 Added SignupForm
+from werkzeug.security import generate_password_hash  # 🔐 For hashing passwords
 from datetime import timedelta, datetime
 import logging
+from werkzeug.security import check_password_hash
 
 logging.basicConfig(level=logging.INFO)
 
@@ -57,14 +59,14 @@ def home():
 
 @app.route('/web')
 def web():
-    if 'cId' not in session:
+    if 'cid' not in session:
         return redirect('/')
 
     conn = g.db_connection
     username = "Guest"
     if conn:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT username FROM customers WHERE cId = %s", (session['cId'],))
+            cursor.execute("SELECT username FROM customers WHERE cid = %s", (session['cid'],))
             result = cursor.fetchone()
             if result and 'username' in result:
                 username = result['username']
@@ -96,7 +98,7 @@ def generate_unique_order_id():
 
 @app.route('/api/order-summary', methods=['POST'])
 def order_summary():
-    if 'cId' not in session:
+    if 'cid' not in session:
         return jsonify({"message": "Not authenticated"}), 401
 
     data = request.get_json()
@@ -123,8 +125,8 @@ def order_summary():
 
                 total_amount = float(item['price']) * int(item['quantity'])
                 cursor.execute(
-                    "INSERT INTO orders (orderId, cId, itemId, totalAmount, itemName, quantity, orderTime) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                    (order_id, session['cId'], item['itemId'], total_amount, item['itemName'], item['quantity'], datetime.now())
+                    "INSERT INTO orders (orderId, cid, itemId, totalAmount, itemName, quantity, orderTime) VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                    (order_id, session['cid'], item['itemId'], total_amount, item['itemName'], item['quantity'], datetime.now())
                 )
             conn.commit()
         return jsonify({"message": "Order processed successfully", "orderId": order_id}), 200
@@ -140,16 +142,10 @@ def login():
         return jsonify({'success': False, 'message': 'Invalid request'}), 400
 
     username = data.get('username', '').strip()
-    phone_number = data.get('phone_number', '').strip()
+    password = data.get('password', '').strip()
 
-    if not username or not phone_number:
+    if not username or not password:
         return jsonify({'success': False, 'message': 'All fields are required'}), 400
-
-    if len(username) > 20 or not username.isalpha():
-        return jsonify({'success': False, 'message': 'Username must be 1-20 alphabetic characters'}), 400
-
-    if not phone_number.isdigit() or len(phone_number) != 10:
-        return jsonify({'success': False, 'message': 'Phone number must be 10 digits'}), 400
 
     conn = g.db_connection
     if not conn:
@@ -157,26 +153,20 @@ def login():
 
     try:
         with conn.cursor() as cursor:
-            cursor.execute("SELECT cId FROM customers WHERE username = %s AND phone_number = %s", (username, phone_number))
+            cursor.execute("SELECT cid, password_hash FROM customers WHERE username = %s", (username,))
             customer = cursor.fetchone()
 
-            if customer:
-                session['cId'] = customer['cId']
+            if customer and check_password_hash(customer['password_hash'], password):
+                session['cid'] = customer['cid']
                 return jsonify({'success': True, 'redirect': url_for('web'), 'message': 'Login successful'})
-
-            cursor.execute("INSERT INTO customers (username, phone_number) VALUES (%s, %s)", (username, phone_number))
-            conn.commit()
-            session['cId'] = cursor.lastrowid
-
-            return jsonify({'success': True, 'redirect': url_for('web'), 'message': 'Account created'})
-    except pymysql.IntegrityError:
-        return jsonify({'success': False, 'message': 'Username already exists'}), 400
+            else:
+                return jsonify({'success': False, 'message': 'Invalid username or password'}), 401
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
 
 @app.route('/api/redeem_reward', methods=['POST'])
 def redeem_reward():
-    if 'cId' not in session:
+    if 'cid' not in session:
         return jsonify({'message': 'Not authenticated'}), 401
 
     points = request.json.get('points', 0)
@@ -195,21 +185,21 @@ def webhook():
 
     parameters = data.get('queryResult', {}).get('parameters', {})
     intent = data.get('queryResult', {}).get('intent', {}).get('displayName')
-    username = "Guest"
 
-    if 'cId' in session:
+    username = "Guest"
+    if 'cid' in session:
         conn = g.db_connection
         with conn.cursor() as cursor:
-            cursor.execute("SELECT username FROM customers WHERE cId = %s", (session['cId'],))
+            cursor.execute("SELECT username FROM customers WHERE cid = %s", (session['cid'],))
             result = cursor.fetchone()
             if result:
                 username = result['username']
 
     if intent == 'track.order':
-        if 'cId' not in session:
+        if 'cid' not in session:
             return jsonify({'fulfillmentText': "You're not logged in. Please log in first."})
 
-        latest_order = get_latest_order(session['cId'])
+        latest_order = get_latest_order(session['cid'])
 
         if latest_order and latest_order.get('orderTime'):
             order_time = latest_order['orderTime']
@@ -230,10 +220,10 @@ def webhook():
             return jsonify({'fulfillmentText': "I couldn't find any recent orders."})
 
     elif intent == 'loyalty.rewards':
-        if 'cId' not in session:
+        if 'cid' not in session:
             return jsonify({'fulfillmentText': "Please log in to view your loyalty rewards."})
 
-        points = get_user_points(session['cId'])
+        points = get_user_points(session['cid'])
 
         if points is not None:
             return jsonify({'fulfillmentText': f"You currently have {points} loyalty points!"})
@@ -241,10 +231,10 @@ def webhook():
             return jsonify({'fulfillmentText': "Sorry, we couldn't find your rewards info."})
 
     elif intent == 'order.complete':
-        if 'cId' not in session:
+        if 'cid' not in session:
             return jsonify({'fulfillmentText': "You're not logged in. Please log in first."})
 
-        latest_order = get_latest_order(session['cId'])
+        latest_order = get_latest_order(session['cid'])
         if latest_order and 'orderId' in latest_order:
             order_id = latest_order['orderId']
             session['last_order_id'] = order_id
@@ -280,22 +270,57 @@ def webhook():
         return jsonify({'fulfillmentText': f"Oops! Error: {str(e)}"}), 500
 
 # Helper functions
-def get_latest_order(cId):
+def get_latest_order(cid):
     conn = g.db_connection
     with conn.cursor() as cursor:
         cursor.execute("""
             SELECT * FROM orders 
-            WHERE cId = %s 
+            WHERE cid = %s 
             ORDER BY orderTime DESC LIMIT 1
-        """, (cId,))
+        """, (cid,))
         return cursor.fetchone()
 
-def get_user_points(cId):
+def get_user_points(cid):
     conn = g.db_connection
     with conn.cursor() as cursor:
-        cursor.execute("SELECT points FROM rewards WHERE cId = %s", (cId,))
+        cursor.execute("SELECT points FROM rewards WHERE cid = %s", (cid,))
         result = cursor.fetchone()
         return result['points'] if result else None
+    
+
+# ✅ SIGNUP ROUTE
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    form = SignupForm()
+    if form.validate_on_submit():
+        username = form.username.data.strip()
+        email = form.email.data.strip()
+        phone = form.phone.data.strip()
+        password = form.password.data
+
+        hashed_password = generate_password_hash(password)
+
+        try:
+            with g.db_connection.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO customers (username, email, phone_number, password_hash)
+                    VALUES (%s, %s, %s, %s)
+                """, (username, email, phone, hashed_password))
+                g.db_connection.commit()
+
+                # Log user in immediately after signup
+                cursor.execute("SELECT cid FROM customers WHERE username = %s", (username,))
+                user = cursor.fetchone()
+                if user:
+                    session['cid'] = user['cid']
+                return redirect(url_for('web'))
+
+        except pymysql.IntegrityError:
+            return render_template('signup.html', form=form, message="Username or email already exists.")
+        except Exception as e:
+            return render_template('signup.html', form=form, message=f"Error: {str(e)}")
+
+    return render_template('signup.html', form=form)
 
 if __name__ == '__main__':
     app.run(debug=True)
