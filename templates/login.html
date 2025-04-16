@@ -80,6 +80,7 @@
 
 <!-- Update JS fetch call -->
 <script>
+
 document.getElementById('login-form').addEventListener('submit', async function(e) {
     e.preventDefault(); 
     const username = document.getElementById('username').value.trim();
@@ -93,9 +94,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
     try {
         const response = await fetch('/login', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
         });
 
@@ -103,6 +102,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
 
         if (response.ok && result.success) {
             localStorage.setItem('username', username);
+            localStorage.setItem('cid', result.cid);  
             window.location.href = result.redirect || '/web';
         } else {
             alert(result.message || "Login failed");
@@ -112,6 +112,8 @@ document.getElementById('login-form').addEventListener('submit', async function(
         alert("An error occurred during login");
     }
 });
+
+
 </script>
 
     <div style="text-align: center; margin-top: 10px;">

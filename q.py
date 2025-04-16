@@ -11,8 +11,15 @@ from werkzeug.security import generate_password_hash  # 🔐 For hashing passwor
 from datetime import timedelta, datetime
 import logging
 from werkzeug.security import check_password_hash
+import json
 
-logging.basicConfig(level=logging.INFO)
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()]
+)
+
 
 load_dotenv()
 
@@ -27,6 +34,7 @@ app.config.update(
     SESSION_COOKIE_SAMESITE='Lax'
 )
 
+
 def get_db_connection():
     try:
         conn = pymysql.connect(
@@ -40,38 +48,218 @@ def get_db_connection():
     except pymysql.MySQLError as e:
         print(f"Database connection error: {e}")
         return None
+    
+def extract_cid_from_context(contexts):
+    for ctx in contexts:
+        if 'user-session' in ctx.get('name', ''):
+            params = ctx.get('parameters', {})
+            cid = params.get('cid') or params.get('number')
+            
+            # 🔒 Make sure it's not a list
+            if isinstance(cid, list) and len(cid) > 0:
+                cid = cid[0]
+
+            if isinstance(cid, (int, float, str)):
+                try:
+                    return int(cid)
+                except ValueError:
+                    pass
+    return None
+
+
+@app.route('/api/start-order', methods=['POST'])
+def start_order():
+    logging.info("POST /api/start-order hit")
+
+    # Check for session authentication
+    if 'cid' not in session:
+        logging.warning("Unauthorized access attempt to /api/start-order")
+        return jsonify({'message': 'Not authenticated'}), 401
+
+    cid = session['cid']
+    logging.debug(f"Session CID: {cid}")
+
+    # Generate order ID if not already present
+    if 'current_order_id' not in session:
+        session['current_order_id'] = generate_unique_order_id()
+        session['order_start_time'] = str(datetime.now())
+        logging.info(f"New order started: orderId={session['current_order_id']}, startTime={session['order_start_time']}")
+    else:
+        logging.info(f"Resuming existing order: orderId={session['current_order_id']}")
+
+    return jsonify({'orderId': session['current_order_id']}), 200
+
+@csrf.exempt
+@app.route('/api/order-summary', methods=['POST'])
+def order_summary():
+    logging.info("POST /api/order-summary hit")
+
+    data = request.get_json()
+    logging.debug(f"Raw request data: {data}")
+
+    cid = data.get('cid')
+    order_id = data.get('order_id')
+    order_data = data.get('orderData', {})
+    selected_items = order_data.get('selectedItems', [])
+
+    if not cid or not order_id:
+        logging.warning("Missing cid or order_id in request")
+        return jsonify({"message": "Missing user or order info"}), 401
+
+    if not selected_items:
+        logging.warning("Order summary attempted with no items selected")
+        return jsonify({"message": "No items selected"}), 400
+
+    conn = g.db_connection
+    if not conn:
+        logging.error("Database connection not available in /api/order-summary")
+        return jsonify({"message": "Database connection failed"}), 500
+
+    try:
+        with conn.cursor() as cursor:
+            for item in selected_items:
+                if not all(k in item for k in ['itemId', 'itemName', 'price', 'quantity']):
+                    logging.warning(f"Skipping malformed item: {item}")
+                    continue
+
+                total_amount = float(item['price']) * int(item['quantity'])
+
+                logging.info(
+                    f"Inserting item: orderId={order_id}, cid={cid}, "
+                    f"itemId={item['itemId']}, itemName={item['itemName']}, "
+                    f"quantity={item['quantity']}, total={total_amount}"
+                )
+
+                cursor.execute("""INSERT INTO orders (orderId, cid, itemId, totalAmount, itemName, quantity, orderTime)
+                                  VALUES (%s, %s, %s, %s, %s, %s, %s)""", (
+                    order_id, cid, item['itemId'], total_amount,
+                    item['itemName'], item['quantity'], datetime.now()
+                ))
+
+            conn.commit()
+
+        logging.info(f"Order {order_id} committed successfully for CID {cid}")
+        return jsonify({"message": "Items added to your order", "orderId": order_id}), 200
+
+    except Exception as e:
+        conn.rollback()
+        logging.exception("Exception during order summary processing")
+        return jsonify({"message": "Error processing order", "error": str(e)}), 500
+
+
+@app.route('/api/complete-order', methods=['POST'])
+def complete_order():
+    logging.info("POST /api/complete-order hit")
+
+    if 'cid' not in session or 'current_order_id' not in session:
+        logging.warning("Order completion failed — missing session cid or current_order_id")
+        return jsonify({'message': 'No order in progress'}), 400
+
+    cid = session['cid']
+    order_id = session.pop('current_order_id')  # Remove so they can’t accidentally reuse
+
+    logging.info(f"Order completed: orderId={order_id}, cid={cid}")
+    logging.debug(f"Remaining session data after completion: {dict(session)}")
+
+    return jsonify({'message': 'Order completed', 'orderId': order_id})
+
+
+
+@app.route('/api/order-current', methods=['GET'])
+def get_current_order():
+    logging.info("GET /api/order-current hit")
+
+    if 'cid' not in session or 'current_order_id' not in session:
+        logging.warning("Attempted to fetch current order without valid session data")
+        return jsonify({"message": "No active order"}), 400
+
+    cid = session['cid']
+    order_id = session['current_order_id']
+    logging.debug(f"Fetching current order for cid={cid}, orderId={order_id}")
+
+    conn = g.db_connection
+    if not conn:
+        logging.error("Database connection not available in /api/order-current")
+        return jsonify({"message": "Database connection failed"}), 500
+
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("""
+                SELECT itemName, quantity, totalAmount
+                FROM orders
+                WHERE cid = %s AND orderId = %s
+            """, (cid, order_id))
+            items = cursor.fetchall()
+
+            logging.info(f"Order retrieved: orderId={order_id}, item count={len(items)}")
+            logging.debug(f"Order details: {items}")
+
+            return jsonify({"orderId": order_id, "items": items}), 200
+    except Exception as e:
+        logging.exception("Error retrieving current order from database")
+        return jsonify({"message": "Failed to retrieve order", "error": str(e)}), 500
+
 
 @app.before_request
 def before_request():
+    logging.debug("Running before_request middleware...")
     g.db_connection = get_db_connection()
-    if not g.db_connection:
+
+    if g.db_connection:
+        logging.debug("Database connection established successfully.")
+    else:
+        logging.error("Failed to establish database connection in before_request.")
         return jsonify({"message": "Failed to connect to database"}), 500
 
 @app.teardown_request
 def teardown_request(exception):
     if hasattr(g, 'db_connection') and g.db_connection:
         g.db_connection.close()
+        logging.debug("Database connection closed successfully at teardown.")
+
+    if exception:
+        logging.error(f"Exception during request teardown: {str(exception)}")
+
 
 @app.route('/', methods=['GET'])
 def home():
+    logging.info("GET / (login page) accessed")
     form = LoginForm()
     return render_template('login.html', form=form)
 
+
+
 @app.route('/web')
 def web():
+    logging.info("GET /web (dashboard) accessed")
+
     if 'cid' not in session:
+        logging.warning("Unauthorized access attempt to /web — redirecting to login")
         return redirect('/')
+
+    cid = session['cid']
+    logging.debug(f"Session CID: {cid}")
 
     conn = g.db_connection
     username = "Guest"
-    if conn:
-        with conn.cursor() as cursor:
-            cursor.execute("SELECT username FROM customers WHERE cid = %s", (session['cid'],))
-            result = cursor.fetchone()
-            if result and 'username' in result:
-                username = result['username']
 
-    return render_template('web.html', username=username)
+    if conn:
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT username FROM customers WHERE cid = %s", (cid,))
+                result = cursor.fetchone()
+                if result and 'username' in result:
+                    username = result['username']
+                    logging.info(f"User dashboard accessed by: {username} (CID: {cid})")
+                else:
+                    logging.warning(f"No username found in DB for CID: {cid}")
+        except Exception as e:
+            logging.error(f"Error fetching username for CID {cid}: {str(e)}")
+    else:
+        logging.error("Database connection missing while rendering /web")
+
+    return render_template("web.html", username=username, cid=cid)
+
 
 @app.route('/menu')
 def menu_page():
@@ -96,43 +284,8 @@ def contact():
 def generate_unique_order_id():
     return ''.join(random.choices(string.digits, k=6))
 
-@app.route('/api/order-summary', methods=['POST'])
-def order_summary():
-    if 'cid' not in session:
-        return jsonify({"message": "Not authenticated"}), 401
 
-    data = request.get_json()
-    if not data or 'orderData' not in data:
-        return jsonify({"message": "Invalid request data"}), 400
 
-    order_data = data['orderData']
-    selected_items = order_data.get('selectedItems', [])
-
-    if not selected_items:
-        return jsonify({"message": "No items selected"}), 400
-
-    conn = g.db_connection
-    if not conn:
-        return jsonify({"message": "Database connection failed"}), 500
-
-    try:
-        order_id = generate_unique_order_id()
-        with conn.cursor() as cursor:
-            for item in selected_items:
-                required_fields = ['itemId', 'itemName', 'price', 'quantity']
-                if not all(field in item for field in required_fields):
-                    continue
-
-                total_amount = float(item['price']) * int(item['quantity'])
-                cursor.execute(
-                    "INSERT INTO orders (orderId, cid, itemId, totalAmount, itemName, quantity, orderTime) VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                    (order_id, session['cid'], item['itemId'], total_amount, item['itemName'], item['quantity'], datetime.now())
-                )
-            conn.commit()
-        return jsonify({"message": "Order processed successfully", "orderId": order_id}), 200
-    except Exception as e:
-        conn.rollback()
-        return jsonify({"message": "Error processing order", "error": str(e)}), 500
 
 @csrf.exempt
 @app.route('/login', methods=['POST'])
@@ -158,11 +311,34 @@ def login():
 
             if customer and check_password_hash(customer['password_hash'], password):
                 session['cid'] = customer['cid']
-                return jsonify({'success': True, 'redirect': url_for('web'), 'message': 'Login successful'})
+                return jsonify({
+    'success': True,
+    'redirect': url_for('web'),
+    'message': 'Login successful',
+    'cid': customer['cid']  # ✅ Send cid to frontend
+})
+
             else:
                 return jsonify({'success': False, 'message': 'Invalid username or password'}), 401
     except Exception as e:
         return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
+    
+@app.route('/get_rewards', methods=['GET'])
+def get_rewards():
+    if 'cid' not in session:
+        logging.warning("Attempt to access /get_rewards without login")
+        return jsonify({'success': False, 'message': 'Not authenticated'}), 401
+
+    cid = session['cid']
+    points = get_user_points(cid)
+
+    if points is not None:
+        logging.info(f"Returned {points} loyalty points for CID {cid}")
+        return jsonify({'success': True, 'points': points})
+    else:
+        logging.warning(f"No loyalty data found for CID {cid}")
+        return jsonify({'success': False, 'message': 'No rewards data found'}), 404
+
 
 @app.route('/api/redeem_reward', methods=['POST'])
 def redeem_reward():
@@ -177,97 +353,339 @@ def redeem_reward():
         return jsonify({'success': True, 'redirect': url_for('orders')})
     return jsonify({'success': False, 'message': 'Need at least 10 points'}), 400
 
+
 @csrf.exempt
 @app.route('/webhook', methods=['POST'])
 def webhook():
-    data = request.get_json()
+    conn = g.db_connection
+
+    data = request.get_json(silent=True, force=True)
+    if not data:
+        logging.warning("No data received in webhook.")
+        return jsonify({"fulfillmentText": "Something went wrong. Please try again."})
+
+    logging.info("Full webhook payload:\n" + json.dumps(data, indent=2))
     logging.info(f"Webhook received: {data}")
 
+    intent = data.get('queryResult', {}).get('intent', {}).get('displayName', '')
     parameters = data.get('queryResult', {}).get('parameters', {})
-    intent = data.get('queryResult', {}).get('intent', {}).get('displayName')
+    output_contexts = data.get('queryResult', {}).get('outputContexts', [])
+
+    cid = session.get('cid')  # default to session cid
+    if not cid:
+        cid = (
+    session.get('cid') or
+    extract_cid_from_context(output_contexts) or
+    data.get('originalDetectIntentRequest', {}).get('payload', {}).get('userId')
+)
 
     username = "Guest"
-    if 'cid' in session:
-        conn = g.db_connection
+
+
+    # Only run DB lookup if cid is now set
+    if cid:
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT username FROM customers WHERE cid = %s", (cid,))
+                result = cursor.fetchone()
+                if result and 'username' in result:
+                    username = result['username']
+                    logging.info(f"Webhook triggered by user: {username} (CID: {cid})")
+        except Exception as e:
+            logging.error(f"DB error fetching username for CID {cid}: {e}")
+    else:
+        logging.error("No CID available — skipping user-specific personalization.")
+
+
+    # ---------- INTENT: DEFAULT WELCOME ----------
+    if intent == "Default Welcome Intent":
+        session_path = data.get("session", "")
+        response = {
+    "fulfillmentText": f"Welcome back, {username}! 🍕 What would you like to order today?",
+    "outputContexts": [
+        {
+            "name": f"{session_path}/contexts/user-session",
+            "lifespanCount": 50,
+            "parameters": {
+                "cid": cid if cid else ""  # better than nothing
+            }
+        }
+    ]
+}
+        return jsonify(response)
+
+
+    # ---------- INTENT: TRACK ORDER ----------
+    if intent == 'track.order- context: Ongoing-tracking':
+        order_id = None
+
+        # Get the orderId directly from the outputContexts
+        for ctx in output_contexts:
+            if 'ongoing-tracking' in ctx.get('name', ''):
+                order_id_param = ctx.get('parameters', {}).get('number', [])
+                if isinstance(order_id_param, list) and order_id_param:
+                    order_id = int(order_id_param[0])
+                elif isinstance(order_id_param, (int, float)):
+                    order_id = int(order_id_param)
+
+        if not order_id:
+            return jsonify({'fulfillmentText': "I couldn’t find any order ID to track."})
+
         with conn.cursor() as cursor:
-            cursor.execute("SELECT username FROM customers WHERE cid = %s", (session['cid'],))
-            result = cursor.fetchone()
-            if result:
-                username = result['username']
+            cursor.execute("""
+                SELECT orderTime FROM orders WHERE orderId = %s ORDER BY orderTime DESC LIMIT 1
+            """, (order_id,))
+            row = cursor.fetchone()
 
-    if intent == 'track.order':
-        if 'cid' not in session:
-            return jsonify({'fulfillmentText': "You're not logged in. Please log in first."})
+            if not row:
+                return jsonify({'fulfillmentText': "I couldn’t find any recent orders."})
 
-        latest_order = get_latest_order(session['cid'])
-
-        if latest_order and latest_order.get('orderTime'):
-            order_time = latest_order['orderTime']
-            now = datetime.now()
-            elapsed_minutes = (now - order_time).total_seconds() / 60
-
-            if elapsed_minutes < 5:
+            order_time = row['orderTime']
+            elapsed = (datetime.now() - order_time).total_seconds() / 60
+            if elapsed < 5:
                 status = "Your order is in the queue."
-            elif elapsed_minutes < 10:
-                status = "Your order is being prepared and will be out soon!"
-            elif elapsed_minutes < 15:
-                status = "Your order is in transit to the pickup counter."
+            elif elapsed < 10:
+                status = "Your order is being prepared!"
+            elif elapsed < 15:
+                status = "Your order is heading to the counter."
             else:
-                status = "Your order is ready! Please come pick it up."
+                status = "Your order is ready! Please pick it up."
 
-            return jsonify({'fulfillmentText': status})
-        else:
-            return jsonify({'fulfillmentText': "I couldn't find any recent orders."})
+        return jsonify({'fulfillmentText': status})
 
+
+    # ---------- INTENT: LOYALTY REWARDS ----------
     elif intent == 'loyalty.rewards':
-        if 'cid' not in session:
-            return jsonify({'fulfillmentText': "Please log in to view your loyalty rewards."})
-
-        points = get_user_points(session['cid'])
-
+        points = get_user_points(cid)
         if points is not None:
-            return jsonify({'fulfillmentText': f"You currently have {points} loyalty points!"})
+            return jsonify({'fulfillmentText': f"You have {points} loyalty points!"})
         else:
-            return jsonify({'fulfillmentText': "Sorry, we couldn't find your rewards info."})
+            return jsonify({'fulfillmentText': "We couldn't find your rewards info."})
+        
 
-    elif intent == 'order.complete':
-        if 'cid' not in session:
-            return jsonify({'fulfillmentText': "You're not logged in. Please log in first."})
+        # ---------- INTENT: ORDER ADD ---------- 
+    elif intent == 'order.add- context: Ongoing-order':
+        food_items = parameters.get('food-item', [])
+        quantities = parameters.get('number', [])
 
-        latest_order = get_latest_order(session['cid'])
-        if latest_order and 'orderId' in latest_order:
-            order_id = latest_order['orderId']
-            session['last_order_id'] = order_id
-            return jsonify({'fulfillmentText': f"Thanks for your order! 🍕 Your Order ID is {order_id}. Now, sit back and wait for the magic!"})
-        else:
-            return jsonify({'fulfillmentText': "We couldn't find your order in our system. Please try again or place a new order."})
+        # 🛠 Ensure quantities is a list
+        if isinstance(quantities, (int, float)):
+            quantities = [quantities]
 
-    # Handle food item logging
-    food_items = parameters.get('food-item', [])
-    quantities = parameters.get('number', [])
 
-    if not food_items:
-        return jsonify({'fulfillmentText': "I didn't catch any items to add."}), 400
+        if not food_items or not quantities or len(food_items) != len(quantities):
+            return jsonify({'fulfillmentText': "Hmm, I couldn't understand the items. Can you try again with clear quantities?"})
 
-    conn = g.db_connection
-    if not conn:
-        return jsonify({'fulfillmentText': "Database error occurred."}), 500
+        if 'current_order_id' not in session:
+            session['current_order_id'] = generate_unique_order_id()
+            logging.info(f"New order started from webhook: {session['current_order_id']}")
 
-    try:
+        order_id = session['current_order_id']
+        mapping = {
+            "Cheesy Pepperoni Pizza": "Pepperoni Pizza",
+            "Cheesy Mushroom Pizza": "Mushroom Pizza",
+            "Garlic Bread": "Garlic Bread",
+            "Classic Pizza": "Classic Pizza",
+            "Fries": "Fries"
+        }
+
+        try:
+            with conn.cursor() as cursor:
+                for name, qty in zip(food_items, quantities):
+                    matched_name = mapping.get(name, name)  # fallback to original if no mapping
+                    cursor.execute("SELECT itemId, price FROM product WHERE LOWER(itemName) = LOWER(%s)", (matched_name,))
+                    product = cursor.fetchone()
+
+                    if not product:
+                        logging.warning(f"Unknown item: {name}")
+                        continue
+
+                    item_id = product['itemId']
+                    price = float(product['price'])
+                    total = price * int(qty)
+
+                    cursor.execute("""
+                        INSERT INTO orders (orderId, cId, itemId, totalAmount, itemName, quantity, orderTime)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    """, (order_id, cid, item_id, total, matched_name, qty, datetime.now()))
+                conn.commit()
+
+            return jsonify({'fulfillmentText': "Order added! Want anything else? Say 'Done' when you're finished."})
+        except Exception as e:
+            logging.error(f"Insert error in order.add: {e}")
+            conn.rollback()
+            return jsonify({'fulfillmentText': "Oops! There was a problem adding your order."})
+
+    elif intent == "inject.cid":
+        cid_text = data.get('queryResult', {}).get('queryText', '')
+        if "set-cid:" in cid_text:
+            try:
+                cid = int(cid_text.split("set-cid:")[1].strip())
+                logging.info(f"Injected CID into webhook: {cid}")
+                session_path = data.get("session", "")
+                return jsonify({
+                    "fulfillmentText": "User context set.",
+                    "outputContexts": [
+                        {
+                        "name": f"{session_path}/contexts/user-session",
+                        "lifespanCount": 50,
+                        "parameters": {
+                            "cid": cid
+                        }
+                        }
+                    ]
+            })
+            except:
+                logging.error("Failed to parse injected CID.")
+                return jsonify({"fulfillmentText": "Could not set user context."})
+
+
+
+
+    
+    # ---------- INTENT: ORDER COMPLETE ----------
+    elif intent == 'order.complete- context: Ongoing-order':
+        logging.info(f"Intent received: {intent}")
+
+        # ✅ FIX: Make sure cid is available
+        if not cid:
+            logging.error("CID not found — cannot complete order")
+            return jsonify({'fulfillmentText': "Oops! We couldn’t confirm your user info."})
+
+        # ✅ Get the latest order ID for this cid
+        order_id = None
         with conn.cursor() as cursor:
-            for i, food in enumerate(food_items):
-                qty = int(quantities[i]) if i < len(quantities) else 1
-                item_str = f"{qty} x {food}"
-                cursor.execute(
-                    "INSERT INTO chatbot_logs (username, item) VALUES (%s, %s)",
-                    (username, item_str)
-                )
+            cursor.execute("""
+                SELECT orderId FROM orders WHERE cid = %s ORDER BY orderTime DESC LIMIT 1
+            """, (cid,))
+            row = cursor.fetchone()
+            if not row:
+                return jsonify({'fulfillmentText': "No recent orders found."})
+            order_id = row['orderId']
+
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT itemName, quantity FROM orders 
+                    WHERE orderId = %s AND cid = %s
+                """, (order_id, cid))
+                items = cursor.fetchall()
+
+                if not items:
+                    return jsonify({'fulfillmentText': "I found your order ID, but no items were found in it."})
+
+                summary = ', '.join(f"{item['quantity']} x {item['itemName']}" for item in items)
+                return jsonify({'fulfillmentText': f"{username}, this is your order summary: {summary}. 🍕 Your Order ID is {order_id}."})
+        except Exception as e:
+            logging.exception("Error fetching order details")
+            return jsonify({'fulfillmentText': "Something went wrong getting your order summary."})
+
+
+
+    # ---------- INTENT: TABLE RESERVATION ----------
+    elif intent == 'table.reservation':
+        guests = parameters.get('number', 1)
+        time = parameters.get('time', '19:00')
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    INSERT INTO reservations (cid, guests, reservation_time)
+                    VALUES (%s, %s, %s)
+                """, (cid, guests, time))
+                conn.commit()
+            return jsonify({'fulfillmentText': f"✅ Table reserved for {guests} guests at {time}. See you soon!"})
+        except Exception as e:
+            logging.error(f"Reservation error: {str(e)}")
+            return jsonify({'fulfillmentText': "Sorry, I couldn't make the reservation."})
+        
+
+        
+        # ---------- INTENT: ORDER REMOVE ----------
+    elif intent == 'order.remove - context: Ongoing-order':
+        food_items = parameters.get('food-item', [])
+
+        quantities = parameters.get('number', [])
+        if isinstance(quantities, (int, float)):
+            quantities = [quantities]
+
+
+        if not cid:
+            return jsonify({'fulfillmentText': "Oops! We couldn’t confirm your user info."})
+
+        if not food_items or not quantities or len(food_items) != len(quantities):
+            return jsonify({'fulfillmentText': "I couldn't figure out what to remove. Can you try again?"})
+
+        # Normalize names like in add
+        mapping = {
+            "Cheesy Pepperoni Pizza": "Pepperoni Pizza",
+            "Cheesy Mushroom Pizza": "Mushroom Pizza",
+            "Garlic Bread": "Garlic Bread",
+            "Classic Pizza": "Classic Pizza",
+            "Fries": "Fries"
+        }
+
+        # Get latest order ID
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT orderId FROM orders WHERE cid = %s ORDER BY orderTime DESC LIMIT 1", (cid,))
+            result = cursor.fetchone()
+            if not result:
+                return jsonify({'fulfillmentText': "No order found to remove from."})
+            order_id = result['orderId']
+
+            removed = []
+
+            for name, qty in zip(food_items, quantities):
+                matched_name = mapping.get(name, name)
+                cursor.execute("SELECT itemId, price FROM product WHERE LOWER(itemName) = LOWER(%s)", (matched_name,))
+                product = cursor.fetchone()
+
+                if not product:
+                    continue
+
+                item_id = product['itemId']
+                price = float(product['price'])
+
+                # Check current quantity in order
+                cursor.execute("""
+                    SELECT quantity FROM orders 
+                    WHERE cid = %s AND orderId = %s AND itemId = %s
+                """, (cid, order_id, item_id))
+                row = cursor.fetchone()
+
+                if not row:
+                    continue
+
+                current_qty = row['quantity']
+                remove_qty = int(qty)
+
+                if current_qty > remove_qty:
+                    new_qty = current_qty - remove_qty
+                    new_total = price * new_qty
+                    cursor.execute("""
+                        UPDATE orders 
+                        SET quantity = %s, totalAmount = %s 
+                        WHERE cid = %s AND orderId = %s AND itemId = %s
+                    """, (new_qty, new_total, cid, order_id, item_id))
+                else:
+                    cursor.execute("""
+                        DELETE FROM orders 
+                        WHERE cid = %s AND orderId = %s AND itemId = %s
+                    """, (cid, order_id, item_id))
+
+                removed.append(matched_name)
+
             conn.commit()
 
-        item_summary = ', '.join([f"{int(quantities[i]) if i < len(quantities) else 1} x {food}" for i, food in enumerate(food_items)])
-        return jsonify({'fulfillmentText': f"Got it, {username}! I've added: {item_summary} to your order. 🍕\nWould you like to order anything else? Type 'done' if you're finished, or tell me your next item and quantity."})
-    except Exception as e:
-        return jsonify({'fulfillmentText': f"Oops! Error: {str(e)}"}), 500
+            if removed:
+                return jsonify({'fulfillmentText': f"{', '.join(removed)} removed! Want something else?"})
+            else:
+                return jsonify({'fulfillmentText': "That item wasn’t in your order!"})
+
+
+
+    # ---------- FALLBACK ----------
+    return jsonify({"fulfillmentText": "Sorry, I didn't catch that. Can you say it again?"})
+
 
 # Helper functions
 def get_latest_order(cid):
@@ -281,11 +699,15 @@ def get_latest_order(cid):
         return cursor.fetchone()
 
 def get_user_points(cid):
+    if not cid:
+        logging.warning("get_user_points called with missing CID")
+        return None
     conn = g.db_connection
     with conn.cursor() as cursor:
         cursor.execute("SELECT points FROM rewards WHERE cid = %s", (cid,))
         result = cursor.fetchone()
         return result['points'] if result else None
+
     
 
 # ✅ SIGNUP ROUTE
@@ -323,4 +745,8 @@ def signup():
     return render_template('signup.html', form=form)
 
 if __name__ == '__main__':
+    app.logger.setLevel(logging.DEBUG)
+    logging.getLogger('werkzeug').setLevel(logging.DEBUG)
+    logging.debug("🔥 Starting app with full debug logging")
     app.run(debug=True)
+
