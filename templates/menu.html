@@ -10,7 +10,25 @@
     
     <title>Our Menu</title>
     <a href="{{ url_for('orders') }}">
-        <button class="button-right">Order Now</button>
+        <!-- menu.html -->
+<button class="button-right" onclick="startOrder()">Order Now</button>
+
+<script>
+    function startOrder() {
+        fetch('/api/start-order', { method: 'POST' })
+  .then(res => res.json())
+  .then(data => {
+    if (data.orderId) {
+      localStorage.setItem('order_id', data.orderId);
+      window.location.href = "/orders";
+    } else {
+      alert("Couldn't start your order.");
+    }
+  });
+
+    }
+</script>
+
         <style>
             .button-right {
                 position: absolute;

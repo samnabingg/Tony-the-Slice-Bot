@@ -133,14 +133,16 @@
     let points = 0; // Initialize points outside of the fetch block
 
     // Fetch and display the reward points
-    fetch('/api/rewards')
+    fetch('/api/loyalty-points')
         .then(response => response.json())
-        .then(rewards => {
-            if (Array.isArray(rewards)) {
-                points = rewards.reduce((acc, reward) => acc + reward.amount, 0);
-            }
+        .then(data => {
+            points = data.points || 0;
             document.getElementById('points').textContent = points;
+        })
+        .catch(error => {
+            console.error('Error fetching loyalty points:', error);
         });
+
     
  
     function redeemReward() {
@@ -150,13 +152,14 @@
             alert('You have used your rewards!');
             
             // Update the server with the new points value
-            fetch('/api/rewards', {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ points: points }),
-            })
+            fetch('/api/redeem_reward', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ points: 5 }),  // We're using 5-point redemption
+        })
+
             .then(response => response.json())
             .then(data => {
                 console.log('Success:', data);

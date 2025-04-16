@@ -12,6 +12,8 @@ from datetime import timedelta, datetime
 import logging
 from werkzeug.security import check_password_hash
 import json
+from datetime import datetime, date
+
 
 
 logging.basicConfig(
@@ -66,7 +68,25 @@ def extract_cid_from_context(contexts):
                     pass
     return None
 
+from datetime import datetime
 
+def parse_reservation_time(raw_time):
+    try:
+        if "T" in raw_time:
+            time_obj = datetime.fromisoformat(raw_time).time()
+        else:
+            time_obj = datetime.strptime(raw_time, "%H:%M:%S").time()
+        return time_obj
+    except ValueError:
+        try:
+            time_obj = datetime.strptime(raw_time, "%H:%M").time()
+            return time_obj
+        except Exception as e:
+            print(f"[ERROR] Time parse failed: {e}")
+            return None
+
+
+@csrf.exempt
 @app.route('/api/start-order', methods=['POST'])
 def start_order():
     logging.info("POST /api/start-order hit")
@@ -114,9 +134,11 @@ def order_summary():
     if not conn:
         logging.error("Database connection not available in /api/order-summary")
         return jsonify({"message": "Database connection failed"}), 500
-
     try:
         with conn.cursor() as cursor:
+            # Calculate total order value from all selected items
+            total = sum(float(item['price']) * int(item['quantity']) for item in selected_items)
+
             for item in selected_items:
                 if not all(k in item for k in ['itemId', 'itemName', 'price', 'quantity']):
                     logging.warning(f"Skipping malformed item: {item}")
@@ -131,12 +153,17 @@ def order_summary():
                 )
 
                 cursor.execute("""INSERT INTO orders (orderId, cid, itemId, totalAmount, itemName, quantity, orderTime)
-                                  VALUES (%s, %s, %s, %s, %s, %s, %s)""", (
+                              VALUES (%s, %s, %s, %s, %s, %s, %s)""", (
                     order_id, cid, item['itemId'], total_amount,
                     item['itemName'], item['quantity'], datetime.now()
                 ))
 
+            # If total >= 20, add 5 points
+            if total >= 20:
+                cursor.execute("UPDATE customers SET loyalty_points = loyalty_points + 5 WHERE cid = %s", (cid,))
+
             conn.commit()
+
 
         logging.info(f"Order {order_id} committed successfully for CID {cid}")
         return jsonify({"message": "Items added to your order", "orderId": order_id}), 200
@@ -346,6 +373,25 @@ def get_rewards():
     else:
         logging.warning(f"No loyalty data found for CID {cid}")
         return jsonify({'success': False, 'message': 'No rewards data found'}), 404
+    
+@app.route('/api/loyalty-points')
+def get_loyalty_points():
+    if 'cid' not in session:
+        return jsonify({'points': 0})
+
+    cid = session['cid']
+    conn = g.db_connection
+
+    try:
+        with conn.cursor() as cursor:
+            cursor.execute("SELECT loyalty_points FROM customers WHERE cid = %s", (cid,))
+            result = cursor.fetchone()
+            points = result['loyalty_points'] if result else 0
+            return jsonify({'points': points})
+    except Exception as e:
+        logging.error(f"Error fetching loyalty points: {e}")
+        return jsonify({'points': 0})
+
 
 
 @app.route('/api/redeem_reward', methods=['POST'])
@@ -353,13 +399,40 @@ def redeem_reward():
     if 'cid' not in session:
         return jsonify({'message': 'Not authenticated'}), 401
 
-    points = request.json.get('points', 0)
-    if not isinstance(points, int) or points < 0:
+    cid = session['cid']
+    redeem_amount = request.json.get('points', 5)  # Default to 5 points per redemption
+
+    if not isinstance(redeem_amount, int) or redeem_amount <= 0:
         return jsonify({'message': 'Invalid points value'}), 400
 
-    if points >= 10:
-        return jsonify({'success': True, 'redirect': url_for('orders')})
-    return jsonify({'success': False, 'message': 'Need at least 10 points'}), 400
+    conn = g.db_connection
+    try:
+        with conn.cursor() as cursor:
+            # Get current points
+            cursor.execute("SELECT loyalty_points FROM customers WHERE cid = %s", (cid,))
+            result = cursor.fetchone()
+
+            if not result:
+                return jsonify({'message': 'User not found'}), 404
+
+            current_points = result['loyalty_points']
+
+            if current_points < redeem_amount:
+                return jsonify({'success': False, 'message': f'You need at least {redeem_amount} points to redeem this reward.'}), 400
+
+            # Deduct points
+            cursor.execute(
+                "UPDATE customers SET loyalty_points = loyalty_points - %s WHERE cid = %s",
+                (redeem_amount, cid)
+            )
+            conn.commit()
+
+        return jsonify({'success': True, 'message': f'{redeem_amount} points redeemed successfully!'})
+
+    except Exception as e:
+        logging.error(f"Error redeeming points: {e}")
+        return jsonify({'success': False, 'message': 'Failed to redeem points'}), 500
+
 
 
 @csrf.exempt
@@ -516,6 +589,13 @@ def webhook():
                         INSERT INTO orders (orderId, cId, itemId, totalAmount, itemName, quantity, orderTime)
                         VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """, (order_id, cid, item_id, total, matched_name, qty, datetime.now()))
+                    # Calculate total order value (example)
+                    total = price * int(qty)
+
+                    # If total >= 20, add 5 points
+                    if total >= 20:
+                        cursor.execute("UPDATE customers SET loyalty_points = loyalty_points + 5 WHERE cid = %s", (cid,))
+
                 conn.commit()
 
             return jsonify({'fulfillmentText': "Order added! Want anything else? Say 'Done' when you're finished."})
@@ -591,21 +671,61 @@ def webhook():
 
 
     # ---------- INTENT: TABLE RESERVATION ----------
-    elif intent == 'table.reservation':
-        guests = parameters.get('number', 1)
-        time = parameters.get('time', '19:00')
+    elif intent == "table.reservation":
+        raw_time = parameters.get("time")
+        cid = (
+    session.get('cid') or
+    extract_cid_from_context(output_contexts) or
+    data.get('originalDetectIntentRequest', {}).get('payload', {}).get('userId')
+)
+
+
+        parsed_time = parse_reservation_time(raw_time)
+
+        if parsed_time:
+            try:
+                conn = get_db_connection()
+                cursor = conn.cursor()
+                cursor.execute("INSERT INTO reservations (cid, reservation_time) VALUES (%s, %s)", (cid, parsed_time))
+                conn.commit()
+                return jsonify({'fulfillmentText': f"Table booked for {parsed_time.strftime('%I:%M %p')}!"})
+            except Exception as e:
+                logging.error(f"Reservation DB error: {e}")
+                return jsonify({'fulfillmentText': "Oops, something went wrong while saving your reservation."})
+            finally:
+                cursor.close()
+                conn.close()
+        else:
+            return jsonify({'fulfillmentText': "Sorry, I couldn't understand the time. Please say something like '7 PM'."})
+
+    elif intent == "table.reservation.details":
+        raw_time = parameters.get("time")
+        num_guests = parameters.get("number")
+        cid = (
+            session.get('cid') or
+            extract_cid_from_context(output_contexts) or
+            data.get('originalDetectIntentRequest', {}).get('payload', {}).get('userId')
+        )
+
+        parsed_time = parse_reservation_time(raw_time)
+
+        if not parsed_time or not num_guests:
+            return jsonify({'fulfillmentText': "Sorry, I need both the number of guests and the time. Can you try again?"})
+
         try:
             with conn.cursor() as cursor:
-                cursor.execute("""
-                    INSERT INTO reservations (cid, guests, reservation_time)
-                    VALUES (%s, %s, %s)
-                """, (cid, guests, time))
+                cursor.execute(
+                    "INSERT INTO reservations (cid, reservation_time, guests) VALUES (%s, %s, %s)",
+                    (cid, parsed_time, num_guests)
+                )
+
                 conn.commit()
-            return jsonify({'fulfillmentText': f"✅ Table reserved for {guests} guests at {time}. See you soon!"})
+                logging.info(f"➡️ Reservation Params Received: time={raw_time}, guests={num_guests}")
+            return jsonify({'fulfillmentText': f"✅ Table booked for {num_guests} at {parsed_time.strftime('%I:%M %p')}!"})
         except Exception as e:
-            logging.error(f"Reservation error: {str(e)}")
-            return jsonify({'fulfillmentText': "Sorry, I couldn't make the reservation."})
-        
+            logging.error(f"Reservation DB error: {e}")
+            return jsonify({'fulfillmentText': "Oops, something went wrong while saving your reservation."})
+    
 
         
         # ---------- INTENT: ORDER REMOVE ----------
@@ -712,9 +832,11 @@ def get_user_points(cid):
         return None
     conn = g.db_connection
     with conn.cursor() as cursor:
-        cursor.execute("SELECT points FROM rewards WHERE cid = %s", (cid,))
+        cursor.execute("SELECT loyalty_points FROM customers WHERE cid = %s", (cid,))
+
         result = cursor.fetchone()
-        return result['points'] if result else None
+        return result['loyalty_points'] if result else None
+
 
     
 
@@ -751,6 +873,13 @@ def signup():
             return render_template('signup.html', form=form, message=f"Error: {str(e)}")
 
     return render_template('signup.html', form=form)
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    logging.info("User logged out successfully.")
+    return redirect(url_for('home'))
+
 
 if __name__ == '__main__':
     app.logger.setLevel(logging.DEBUG)

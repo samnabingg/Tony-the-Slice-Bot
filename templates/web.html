@@ -54,6 +54,16 @@
       background-color: #126b00;
     }
 
+    nav a[href="/logout"] {
+      color: white;
+      background-color: #cc0000;
+      font-weight: bold;
+    }
+
+    nav a[href="/logout"]:hover {
+      background-color: #990000;
+    }
+
     .home {
       display: flex;
       flex-wrap: wrap;
@@ -96,6 +106,7 @@
       <a href="/menu" target="_blank">Menu</a>
       <a href="/points" target="_blank">Rewards</a>
       <a href="/contact" target="_blank">About Us</a>
+      <a href="/logout">Sign Out</a>
     </nav>
   </header>
 
@@ -110,19 +121,18 @@
 
   <!-- Dialogflow Messenger -->
   <df-messenger
-  intent="WELCOME"
-  chat-title="TonytheSlicebot"
-  agent-id="ced4eb2f-c5e6-4885-adaf-31a361664559"
-  language-code="en"
-  user-id="{{ cid }}">
-</df-messenger>
+    intent="WELCOME"
+    chat-title="TonytheSlicebot"
+    agent-id="ced4eb2f-c5e6-4885-adaf-31a361664559"
+    language-code="en"
+    user-id="{{ cid }}">
+  </df-messenger>
 
   <script>
     window.addEventListener('DOMContentLoaded', () => {
       const cid = "{{ cid }}";
       const dfMessenger = document.querySelector('df-messenger');
-  
-      // Inject CID once chatbot is opened
+
       dfMessenger.addEventListener('df-chat-open-changed', function (event) {
         if (event.detail.opened) {
           dfMessenger.renderCustomTextRequest("set-cid:" + cid);
@@ -130,9 +140,5 @@
       });
     });
   </script>
-  
-  
-    
-    
 </body>
 </html>
