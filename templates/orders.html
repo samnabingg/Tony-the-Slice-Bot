@@ -223,14 +223,7 @@
             });
 
             // Send data to server
-            const dataToSend = {
-  cid: parseInt(localStorage.getItem("cid")),
-  order_id: parseInt(localStorage.getItem("order_id")),
-  orderData: {
-    selectedItems: selectedItems
-  }
-};
-
+            const dataToSend = { orderData: { selectedItems: selectedItems } };
             
             fetch('/api/order-summary', {
                 method: 'POST',

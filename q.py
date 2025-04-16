@@ -271,7 +271,15 @@ def points():
 
 @app.route('/orders')
 def orders():
-    return render_template('orders.html')
+    cid = session.get('cid')
+    order_id = session.get('current_order_id')  # this is already set in the webhook
+
+    if not cid or not order_id:
+        logging.warning("Missing CID or Order ID for /orders page")
+        return redirect('/')  # or show a message saying they must start order
+
+    return render_template('orders.html', cid=cid, order_id=order_id)
+
 
 @app.route('/timer')
 def timer_page():
