@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -28,7 +29,7 @@
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
 
-        .item, .side {
+        .item, .side, .drinks-item, .pizza-item, .sides-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -44,7 +45,6 @@
             color: #333333;
         }
 
-        /* Button Styles */
         #clear-btn {
             background-color: #f44336;
             color: white;
@@ -67,7 +67,6 @@
             opacity: 0.8;
         }
 
-        /* Rewards Section */
         .reward-btn {
             background-color: transparent;
             color: #3498db;
@@ -83,34 +82,43 @@
             border-color: #2980b9;
         }
 
-        .reward-btn.outlined {
-            background-color: #3498db;
+        .back-button {
+            display: inline-block;
+            margin: 20px;
+            padding: 10px 16px;
+            background-color: #00178b;
             color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: background-color 0.3s ease;
         }
 
-        .reward-btn.outlined:hover {
-            background-color: #2980b9;
+        .back-button:hover {
+            background-color: #0033cc;
         }
     </style>
 </head>
 <body>
+    <a href="/menu" class="back-button">← Back to Menu</a>
+
     <h1>Pizzas</h1>
     <div class="container">
         <ul id="pizza-list">
             <li class="pizza-item">
-                <label for="classicPizza">Classic Pizza - $10.00</label>
-                <input type="checkbox" id="classicPizza" name="item" value="1" data-price="10.00">
-                <input type="number" id="classicPizzaQuantity" name="quantity" min="1" max="10" value="1">
+                <label for="classicPizza">Classic Pizza - $14.00</label>
+                <input type="checkbox" id="classicPizza" name="item" value="1" data-price="14.00">
+                <input type="number" id="classicPizzaQuantity" min="1" max="100" value="1">
             </li>
             <li class="pizza-item">
-                <label for="pepperoniPizza">Pepperoni Pizza - $10.00</label>
-                <input type="checkbox" id="pepperoniPizza" name="item" value="2" data-price="10.00">
-                <input type="number" id="pepperoniPizzaQuantity" name="quantity" min="1" max="10" value="1">
+                <label for="pepperoniPizza">Pepperoni Pizza - $18.00</label>
+                <input type="checkbox" id="pepperoniPizza" name="item" value="2" data-price="18.00">
+                <input type="number" id="pepperoniPizzaQuantity" min="1" max="100" value="1">
             </li>
             <li class="pizza-item">
-                <label for="mushroomPizza">Mushroom Pizza - $10.00</label>
-                <input type="checkbox" id="mushroomPizza" name="item" value="3" data-price="10.00">
-                <input type="number" id="mushroomPizzaQuantity" name="quantity" min="1" max="10" value="1">
+                <label for="mushroomPizza">Mushroom Pizza - $16.00</label>
+                <input type="checkbox" id="mushroomPizza" name="item" value="3" data-price="16.00">
+                <input type="number" id="mushroomPizzaQuantity" min="1" max="100" value="1">
             </li>
         </ul>
     </div>
@@ -119,14 +127,30 @@
     <div class="container">
         <ul id="sides-list">
             <li class="sides-item">
-                <label for="fries">Fries - $2.00</label>
-                <input type="checkbox" id="fries" name="side" value="4" data-price="2.00">
-                <input type="number" id="friesQuantity" name="quantity" min="1" max="10" value="1">
+                <label for="fries">Fries - $3.50</label>
+                <input type="checkbox" id="fries" name="item" value="4" data-price="3.50">
+                <input type="number" id="friesQuantity" min="1" max="100" value="1">
             </li>
             <li class="sides-item">
-                <label for="garlicBread">Garlic Bread - $2.00</label>
-                <input type="checkbox" id="garlicBread" name="side" value="5" data-price="2.00">
-                <input type="number" id="garlicBreadQuantity" name="quantity" min="1" max="10" value="1">
+                <label for="garlicBread">Garlic Bread - $3.50</label>
+                <input type="checkbox" id="garlicBread" name="item" value="5" data-price="3.50">
+                <input type="number" id="garlicBreadQuantity" min="1" max="100" value="1">
+            </li>
+            <li class="sides-item">
+                <label for="wings">Wings - $8.50</label>
+                <input type="checkbox" id="wings" name="item" value="6" data-price="8.50">
+                <input type="number" id="wingsQuantity" min="1" max="100" value="1">
+            </li>
+        </ul>
+    </div>
+
+    <h1>Drinks</h1>
+    <div class="container">
+        <ul id="drinks-list">
+            <li class="drinks-item">
+                <label for="soda">Soda - $2.00</label>
+                <input type="checkbox" id="soda" name="item" value="7" data-price="2.00">
+                <input type="number" id="sodaQuantity" min="1" max="100" value="1">
             </li>
         </ul>
     </div>
@@ -136,7 +160,7 @@
         <ul id="order-summary"></ul>
         <p>Total: $<span id="total">0.00</span></p>
         <button id="clear-btn">Clear Everything</button>
-        <a href="/timer" class="place-order" id="order-btn">Place Your Order</a>
+        <button id="order-btn">Place Your Order</button>
     </div>
 
     <header>
@@ -151,175 +175,104 @@
     </section>
 
     <script>
-        // DOM Elements
         const itemCheckboxes = document.querySelectorAll('input[name="item"]');
-        const sideCheckboxes = document.querySelectorAll('input[name="side"]');
         const quantityInputs = document.querySelectorAll('input[type="number"]');
         const totalSpan = document.getElementById('total');
         const orderSummary = document.getElementById('order-summary');
         const clearButton = document.getElementById('clear-btn');
         const orderButton = document.getElementById('order-btn');
         const pointsSpan = document.getElementById('points');
-        
+
         let points = 0;
 
-        // Update total price calculation
         function updateTotal() {
             let total = 0;
-            
+            orderSummary.innerHTML = '';
+
             itemCheckboxes.forEach(checkbox => {
                 if (checkbox.checked) {
                     const price = parseFloat(checkbox.getAttribute('data-price'));
-                    const quantity = parseInt(document.getElementById(`${checkbox.id}Quantity`).value) || 0;
+                    const quantity = parseInt(document.getElementById(checkbox.id + 'Quantity').value) || 1;
                     total += price * quantity;
+
+                    const li = document.createElement('li');
+                    li.textContent = checkbox.parentElement.textContent.trim().split(' - ')[0] + ' x' + quantity + ' - $' + (price * quantity).toFixed(2);
+                    orderSummary.appendChild(li);
                 }
             });
-            
-            sideCheckboxes.forEach(checkbox => {
-                if (checkbox.checked) {
-                    const price = parseFloat(checkbox.getAttribute('data-price'));
-                    const quantity = parseInt(document.getElementById(`${checkbox.id}Quantity`).value) || 0;
-                    total += price * quantity;
-                }
-            });
-            
+
             totalSpan.textContent = total.toFixed(2);
         }
 
-        // Add items to order summary and send to server
-        function addToOrder() {
-            const selectedItems = [];
-            
-            itemCheckboxes.forEach(checkbox => {
-                if (checkbox.checked) {
-                    const quantity = parseInt(document.getElementById(`${checkbox.id}Quantity`).value) || 0;
-                    selectedItems.push({
-                        itemId: parseInt(checkbox.value),
-                        itemName: checkbox.parentElement.textContent.trim().split(' - ')[0],
-                        price: parseFloat(checkbox.getAttribute('data-price')),
-                        quantity: quantity
-                    });
-                }
-            });
-            
-            sideCheckboxes.forEach(checkbox => {
-                if (checkbox.checked) {
-                    const quantity = parseInt(document.getElementById(`${checkbox.id}Quantity`).value) || 0;
-                    selectedItems.push({
-                        itemId: parseInt(checkbox.value),
-                        itemName: checkbox.parentElement.textContent.trim().split(' - ')[0],
-                        price: parseFloat(checkbox.getAttribute('data-price')),
-                        quantity: quantity
-                    });
-                }
-            });
-
-            // Update order summary display
-            orderSummary.innerHTML = '';
-            selectedItems.forEach(item => {
-                const li = document.createElement('li');
-                li.textContent = `${item.itemName} x${item.quantity} - $${(item.price * item.quantity).toFixed(2)}`;
-                orderSummary.appendChild(li);
-            });
-
-            // Send data to server
-            const cid = localStorage.getItem('cid');
-            const order_id = localStorage.getItem('order_id');
-
-            const dataToSend = {
-                cid: cid ? parseInt(cid) : null,
-                order_id: order_id ? parseInt(order_id) : null,
-                orderData: { selectedItems: selectedItems }
-            };
-
-
-            console.log("Sending order summary:", dataToSend);
-
-            fetch('/api/order-summary', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(dataToSend)
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log('Order successful:', data);
-                // Update points after successful order
-                updatePoints();
-            })
-            .catch(error => {
-                console.error('Order failed:', error);
-            });
-        }
-
-        // Clear all selections
         function clearAll() {
-            itemCheckboxes.forEach(checkbox => checkbox.checked = false);
-            sideCheckboxes.forEach(checkbox => checkbox.checked = false);
-            quantityInputs.forEach(input => input.value = 1);
-            orderSummary.innerHTML = '';
-            totalSpan.textContent = '0.00';
+            itemCheckboxes.forEach(cb => cb.checked = false);
+            quantityInputs.forEach(q => q.value = 1);
+            updateTotal();
         }
 
-        // Validate order before submission
         function validateOrder() {
-            const selectedItems = [...itemCheckboxes, ...sideCheckboxes].filter(checkbox => checkbox.checked);
-            if (selectedItems.length === 0) {
-                alert('Please select at least one item before placing your order.');
-                return false;
-            }
-            return true;
+            return [...itemCheckboxes].some(cb => cb.checked);
         }
 
-        // Redeem reward points
         function redeemReward() {
             if (points >= 5) {
                 points -= 5;
                 pointsSpan.textContent = points;
-                
-                // Apply $5 discount to total
-                let currentTotal = parseFloat(totalSpan.textContent);
-                currentTotal = Math.max(0, currentTotal - 5);
-                totalSpan.textContent = currentTotal.toFixed(2);
-                
-                alert('$5 discount applied!');
+                let total = parseFloat(totalSpan.textContent);
+                totalSpan.textContent = Math.max(0, total - 5).toFixed(2);
+                alert("$5 discount applied!");
             } else {
-                alert('You need at least 5 points to redeem this reward.');
+                alert("You need at least 5 points to redeem.");
             }
         }
 
-        // Fetch and update points from server
         function updatePoints() {
             fetch('/api/loyalty-points')
-                .then(response => response.json())
+                .then(res => res.json())
                 .then(data => {
                     points = data.points || 0;
                     pointsSpan.textContent = points;
-                })
-                .catch(error => {
-                console.error('Error fetching loyalty points:', error);
                 });
-    }
+        }
 
+        function addToOrder() {
+            const cid = localStorage.getItem('cid');
+            const order_id = localStorage.getItem('order_id');
 
-        // Event Listeners
-        itemCheckboxes.forEach(checkbox => checkbox.addEventListener('change', updateTotal));
-        sideCheckboxes.forEach(checkbox => checkbox.addEventListener('change', updateTotal));
-        quantityInputs.forEach(input => {
-            input.addEventListener('change', updateTotal);
-            input.addEventListener('input', updateTotal);
-        });
+            const selectedItems = [];
+
+            itemCheckboxes.forEach(checkbox => {
+                if (checkbox.checked) {
+                    const quantity = parseInt(document.getElementById(checkbox.id + 'Quantity').value);
+                    selectedItems.push({
+                        itemId: parseInt(checkbox.value),
+                        itemName: checkbox.parentElement.textContent.trim().split(' - ')[0],
+                        price: parseFloat(checkbox.getAttribute('data-price')),
+                        quantity: quantity
+                    });
+                }
+            });
+
+            fetch('/api/order-summary', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ cid: parseInt(cid), order_id: parseInt(order_id), orderData: { selectedItems } })
+            })
+            .then(res => res.json())
+            .then(data => {
+                updatePoints();
+                alert("Order placed!");
+            });
+        }
+
+        itemCheckboxes.forEach(cb => cb.addEventListener('change', updateTotal));
+        quantityInputs.forEach(q => q.addEventListener('input', updateTotal));
         clearButton.addEventListener('click', clearAll);
-        orderButton.addEventListener('click', (e) => {
-            if (!validateOrder()) {
-                e.preventDefault();
-            } else {
-                addToOrder();
-            }
+        orderButton.addEventListener('click', () => {
+            if (validateOrder()) addToOrder();
+            else alert("Please select at least one item.");
         });
 
-        // Initialize
         updateTotal();
         updatePoints();
     </script>

@@ -482,7 +482,7 @@ def webhook():
     if intent == "Default Welcome Intent":
         session_path = data.get("session", "")
         response = {
-    "fulfillmentText": f"Welcome back, {username}! 🍕 What would you like to order today?",
+    "fulfillmentText": f"Welcome back, {username}! 🍕 What would you like to do today? (Hint: Place an order, track order, add/remove order, Table Reservation, Contact Info)",
     "outputContexts": [
         {
             "name": f"{session_path}/contexts/user-session",
@@ -523,14 +523,15 @@ def webhook():
 
             order_time = row['orderTime']
             elapsed = (datetime.now() - order_time).total_seconds() / 60
+            elapsed = round(elapsed, 1)
             if elapsed < 5:
-                status = "Your order is in the queue."
+                status = f"Your order is in the queue. It has only been {elapsed} minutes since you ordered"
             elif elapsed < 10:
-                status = "Your order is being prepared!"
+                status = f"Your order is being prepared! It has been {elapsed} minutes since you ordered"
             elif elapsed < 15:
-                status = "Your order is heading to the counter."
+                status = f"Your order is heading to the counter. It has been {elapsed} minutes since you ordered"
             else:
-                status = "Your order is ready! Please pick it up."
+                status = f"Your order is ready! Please pick it up. It has been {elapsed} minutes since you ordered"
 
         return jsonify({'fulfillmentText': status})
 
@@ -567,7 +568,9 @@ def webhook():
             "Cheesy Mushroom Pizza": "Mushroom Pizza",
             "Garlic Bread": "Garlic Bread",
             "Classic Pizza": "Classic Pizza",
-            "Fries": "Fries"
+            "Fries": "Fries",
+            "Chicken Wings": "Wings",
+            "Pop": "Soda"
         }
 
         try:
@@ -635,13 +638,11 @@ def webhook():
     elif intent == 'order.complete- context: Ongoing-order':
         logging.info(f"Intent received: {intent}")
 
-        # ✅ FIX: Make sure cid is available
         if not cid:
             logging.error("CID not found — cannot complete order")
             return jsonify({'fulfillmentText': "Oops! We couldn’t confirm your user info."})
 
-        # ✅ Get the latest order ID for this cid
-        order_id = None
+    # ✅ Get the latest order ID for this cid
         with conn.cursor() as cursor:
             cursor.execute("""
                 SELECT orderId FROM orders WHERE cid = %s ORDER BY orderTime DESC LIMIT 1
@@ -662,41 +663,57 @@ def webhook():
                 if not items:
                     return jsonify({'fulfillmentText': "I found your order ID, but no items were found in it."})
 
-                summary = ', '.join(f"{item['quantity']} x {item['itemName']}" for item in items)
-                return jsonify({'fulfillmentText': f"{username}, this is your order summary: {summary}. 🍕 Your Order ID is {order_id}."})
+                # ✅ Full menu price list
+                prices = {
+                "Classic Pizza": 10.00,
+                "Cheesy Pepperoni Pizza": 18.00,
+                "Cheesy Mushroom Pizza": 16.00,
+                "Garlic Bread": 3.50,
+                "Fries": 3.50,
+                "Soda": 2.00,
+                "Wings": 8.50,
+                "Pepperoni Pizza": 18.00,
+                "Mushroom Pizza": 16.00  # fallback mapped names
+                }
+
+                summary_lines = []
+                total = 0.0
+
+                for item in items:
+                    name = item['itemName']
+                    qty = item['quantity']
+                    price = prices.get(name, 0)
+                    subtotal = qty * price
+                    total += subtotal
+                    summary_lines.append(f"{qty} x {name} (${price:.2f})")
+
+                summary = ', '.join(summary_lines)
+                response = f"{username}, this is your order summary: {summary}. 🍕 Your Order ID is {order_id}. Your total is: ${total:.2f}."
+
+                return jsonify({'fulfillmentText': response})
+
         except Exception as e:
             logging.exception("Error fetching order details")
             return jsonify({'fulfillmentText': "Something went wrong getting your order summary."})
 
 
 
+
     # ---------- INTENT: TABLE RESERVATION ----------
     elif intent == "table.reservation":
-        raw_time = parameters.get("time")
-        cid = (
-    session.get('cid') or
-    extract_cid_from_context(output_contexts) or
-    data.get('originalDetectIntentRequest', {}).get('payload', {}).get('userId')
-)
+        session_path = data.get("session", "")
+    
+        # Set context for next step
+        return jsonify({
+            "fulfillmentText": "Great choice! Let’s get you the best seat in the house. How many guests and what time?",
+            "outputContexts": [
+                {
+                "name": f"{session_path}/contexts/awaiting_reservation_details",
+                "lifespanCount": 5
+                }
+            ]
+        })
 
-
-        parsed_time = parse_reservation_time(raw_time)
-
-        if parsed_time:
-            try:
-                conn = get_db_connection()
-                cursor = conn.cursor()
-                cursor.execute("INSERT INTO reservations (cid, reservation_time) VALUES (%s, %s)", (cid, parsed_time))
-                conn.commit()
-                return jsonify({'fulfillmentText': f"Table booked for {parsed_time.strftime('%I:%M %p')}!"})
-            except Exception as e:
-                logging.error(f"Reservation DB error: {e}")
-                return jsonify({'fulfillmentText': "Oops, something went wrong while saving your reservation."})
-            finally:
-                cursor.close()
-                conn.close()
-        else:
-            return jsonify({'fulfillmentText': "Sorry, I couldn't understand the time. Please say something like '7 PM'."})
 
     elif intent == "table.reservation.details":
         raw_time = parameters.get("time")
@@ -808,6 +825,38 @@ def webhook():
                 return jsonify({'fulfillmentText': f"{', '.join(removed)} removed! Want something else?"})
             else:
                 return jsonify({'fulfillmentText': "That item wasn’t in your order!"})
+            
+    
+    elif intent == "reservation.check":
+        if not cid:
+            return jsonify({'fulfillmentText': "I couldn’t find your account. Please log in first."})
+
+        try:
+            with conn.cursor() as cursor:
+                cursor.execute("""
+                    SELECT reservation_time, guests
+                    FROM reservations
+                    WHERE cid = %s
+                    ORDER BY reservation_time DESC
+                    LIMIT 1
+                """, (cid,))
+                result = cursor.fetchone()
+
+                if result:
+                    reservation_time = result['reservation_time']
+                    if isinstance(reservation_time, datetime):
+                            res_time = reservation_time.strftime("%I:%M %p")
+                    else:
+                            res_time = str(reservation_time)
+
+                    guests = result['guests']
+                    return jsonify({'fulfillmentText': f"You have a reservation for {guests} people at {res_time}."})
+                else:
+                    return jsonify({'fulfillmentText': "You don’t have any reservations at the moment."})
+        except Exception as e:
+            logging.error(f"[RESERVATION CHECK ERROR] {e}")
+            return jsonify({'fulfillmentText': "Something went wrong while checking your reservation."})
+
 
 
 

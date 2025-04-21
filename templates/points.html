@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <a href="/web" class="back-button">← Back to Home</a>
+
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
@@ -79,6 +81,21 @@
             font-size: 14px;
             color: #cb1f1f88;
         }
+        .back-button {
+  background-color: #444;
+  color: white;
+  padding: 0.4rem 0.8rem;
+  border-radius: 5px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  margin-right: 1rem;
+  transition: background-color 0.3s;
+}
+
+.back-button:hover {
+  background-color: #666;
+}
+
 
       
     </style>

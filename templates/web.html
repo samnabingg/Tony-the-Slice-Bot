@@ -95,6 +95,19 @@
       max-height: 500px !important;
       height: 100% !important;
     }
+
+    #voiceToggleBtn {
+      position: fixed;
+      bottom: 100px;
+      right: 30px;
+      z-index: 1000;
+      padding: 0.6rem 1rem;
+      background-color: #00178b;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
   </style>
 </head>
 
@@ -128,7 +141,61 @@
     user-id="{{ cid }}">
   </df-messenger>
 
+  <!-- Voice toggle button -->
+  <button id="voiceToggleBtn">🔊 Voice: ON</button>
+
   <script>
+    let voices = [];
+    let voiceEnabled = true;
+
+    function loadVoices() {
+      voices = speechSynthesis.getVoices();
+      if (voices.length === 0) {
+        setTimeout(loadVoices, 100);
+      }
+    }
+
+    if (speechSynthesis.onvoiceschanged !== undefined) {
+      speechSynthesis.onvoiceschanged = loadVoices;
+    }
+    loadVoices();
+
+    document.getElementById("voiceToggleBtn").addEventListener("click", () => {
+      voiceEnabled = !voiceEnabled;
+      document.getElementById("voiceToggleBtn").textContent = voiceEnabled ? "🔊 Voice: ON" : "🔇 Voice: OFF";
+    });
+
+    function speakMessage(message) {
+      if (!voiceEnabled) return;
+
+      const synth = window.speechSynthesis;
+      if (!synth || !message) return;
+
+      const cleanedMessage = message.replace(
+        /([\u2700-\u27BF]|[\uE000-\uF8FF]|[\uD83C-\uDBFF\uDC00-\uDFFF])/g,
+        ''
+      ).trim();
+
+      const utter = new SpeechSynthesisUtterance(cleanedMessage);
+      utter.lang = "en-UK";
+      utter.pitch = 1;
+      utter.rate = 1;
+      utter.volume = 1;
+
+      const preferredVoice = voices.find(v =>
+        v.name.includes("Google US English Female") ||
+        v.name.includes("Microsoft Zira") ||
+        (v.lang === 'en-UK' && v.name.toLowerCase().includes("female"))
+      );
+
+      if (preferredVoice) {
+        utter.voice = preferredVoice;
+      }
+
+      synth.cancel();
+      synth.speak(utter);
+    }
+
     window.addEventListener('DOMContentLoaded', () => {
       const cid = "{{ cid }}";
       const dfMessenger = document.querySelector('df-messenger');
@@ -136,6 +203,16 @@
       dfMessenger.addEventListener('df-chat-open-changed', function (event) {
         if (event.detail.opened) {
           dfMessenger.renderCustomTextRequest("set-cid:" + cid);
+        }
+      });
+
+      dfMessenger.addEventListener('df-response-received', function (event) {
+        const response = event.detail.response;
+        const fulfillmentMessages = response.queryResult.fulfillmentMessages;
+
+        if (fulfillmentMessages && fulfillmentMessages.length > 0) {
+          const message = fulfillmentMessages[0].text.text[0];
+          speakMessage(message);
         }
       });
     });
