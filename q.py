@@ -240,12 +240,16 @@ def before_request():
 
 @app.teardown_request
 def teardown_request(exception):
-    if hasattr(g, 'db_connection') and g.db_connection:
-        g.db_connection.close()
-        logging.debug("Database connection closed successfully at teardown.")
+    try:
+        if hasattr(g, 'db_connection') and g.db_connection:
+            g.db_connection.close()
+            app.logger.debug("Database connection closed successfully at teardown.")
+    except Exception as e:
+        app.logger.warning(f"Error during teardown: {e}")
 
     if exception:
-        logging.error(f"Exception during request teardown: {str(exception)}")
+        app.logger.error(f"Exception during request teardown: {str(exception)}")
+
 
 
 @app.route('/', methods=['GET'])

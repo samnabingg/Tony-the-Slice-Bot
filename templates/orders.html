@@ -255,15 +255,25 @@
 
             fetch('/api/order-summary', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ cid: parseInt(cid), order_id: parseInt(order_id), orderData: { selectedItems } })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    cid: parseInt(cid),
+                    order_id: parseInt(order_id),
+                    orderData: { selectedItems }
+                })
             })
             .then(res => res.json())
             .then(data => {
                 updatePoints();
                 alert("Order placed!");
+                window.location.href = "/timer";  // 👈 Redirect here
+            })
+            .catch(err => {
+                console.error("Order submission failed:", err);
+                alert("Something went wrong while placing your order.");
             });
-        }
+}
+
 
         itemCheckboxes.forEach(cb => cb.addEventListener('change', updateTotal));
         quantityInputs.forEach(q => q.addEventListener('input', updateTotal));
